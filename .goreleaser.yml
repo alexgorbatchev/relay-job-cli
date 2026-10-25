@@ -1,0 +1,30 @@
+version: 2
+project_name: relay-job
+
+builds:
+  - id: relay-job
+    main: ./cmd/relay-job
+    binary: relay-job
+    flags: [-trimpath]
+    env:
+      - CGO_ENABLED=0
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+    ldflags:
+      - -s -w -X main.version={{ .Version }}
+
+archives:
+  - id: versioned
+    formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE
+      - README.md
+      - examples/*.toml
+      - examples/*.plist
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  disable: true

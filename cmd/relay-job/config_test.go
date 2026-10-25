@@ -1,0 +1,190 @@
+package main
+
+import (
+	"context"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/alexgorbatchev/relay-job-cli/internal/job"
+)
+
+func configFixture(t *testing.T) (string, job.Config) {
+	t.Helper()
+	dir, err := os.MkdirTemp("", "rjcfg-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(dir) })
+	return filepath.Join(dir, "config.toml"), job.Config{Paths: job.PathConfig{State: filepath.Join(dir, "state"), Cache: filepath.Join(dir, "cache"), Socket: filepath.Join(dir, "api")}, Worker: job.WorkerSettings{Slots: new(2)}, Retention: job.RetentionSettings{Logs: new("1h"), Workspaces: new("0"), Interval: new("10ms")}}
+}
+
+func TestTOMLWorkerAndFlagPrecedence(t *testing.T) {
+	for _, override := range []bool{false, true} {
+		t.Run(map[bool]string{false: "toml", true: "flags"}[override], func(t *testing.T) {
+			path, cfg := configFixture(t)
+			if err := writeTOML(path, cfg); err != nil {
+				t.Fatal(err)
+			}
+			args := []string{"worker", "serve", "--config", path}
+			wantSlots := 2
+			if override {
+				args = append(args, "--slots", "3", "--log-retention=0", "--socket", filepath.Join(filepath.Dir(path), "override.sock"))
+				cfg.Paths.Socket = filepath.Join(filepath.Dir(path), "override.sock")
+				wantSlots = 3
+			}
+			store := job.Store{Dir: cfg.Paths.State}
+			r := job.Record{Request: job.Request{ID: job.NewID(), Source: t.TempDir(), Spec: job.Spec{Command: []string{"true"}}}, State: "succeeded", LogsCollected: true, Updated: time.Now().Add(-2 * time.Hour)}
+			if err := job.WriteJSON(store.Path(r.ID, "record.json"), r); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(store.Path(r.ID, "stdout"), []byte("keep or expire"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			ctx, cancel := context.WithCancel(context.Background())
+			done := make(chan int, 1)
+			go func() {
+				_, stderr, code := execute(ctx, args...)
+				if code != 0 {
+					t.Error(stderr)
+				}
+				done <- code
+			}()
+			t.Cleanup(func() { cancel(); <-done })
+			rpc := job.NewRPC(cfg.Paths.Socket)
+			defer rpc.Close()
+			var h job.Health
+			deadline := time.Now().Add(5 * time.Second)
+			for {
+				if err := rpc.Call(ctx, "GET", "/health", nil, &h); err == nil {
+					break
+				}
+				if time.Now().After(deadline) {
+					t.Fatal("TOML worker did not start")
+				}
+				time.Sleep(10 * time.Millisecond)
+			}
+			if h.Slots != wantSlots {
+				t.Fatal(h)
+			}
+			for {
+				got, err := store.Get(r.ID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if override {
+					if got.LogsExpired {
+						t.Fatal("TOML beat --log-retention=0")
+					}
+					break
+				}
+				if got.LogsExpired {
+					break
+				}
+				if time.Now().After(deadline) {
+					t.Fatal("TOML retention did not run")
+				}
+				time.Sleep(10 * time.Millisecond)
+			}
+		})
+	}
+}
+
+func TestTOMLErrorsAndRoleDefaults(t *testing.T) {
+	path, cfg := configFixture(t)
+	if err := os.WriteFile(path, []byte("[worker]\nslot=2\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, stderr, code := execute(context.Background(), "--config", path, "worker", "serve"); code != 1 || !strings.Contains(stderr, "decode") {
+		t.Fatal(code, stderr)
+	}
+	if _, _, code := execute(context.Background(), "--config", path+".missing", "job", "status", job.NewID()); code != 1 {
+		t.Fatal(code)
+	}
+	if err := writeTOML(path, cfg); err != nil {
+		t.Fatal(err)
+	}
+	if _, stderr, code := execute(context.Background(), "--config", path, "coordinator", "serve"); code != 1 || !strings.Contains(stderr, "at least one worker") {
+		t.Fatal(code, stderr)
+	}
+	for _, role := range []string{"worker", "coordinator"} {
+		root := newRootCommand()
+		cmd, _, err := root.Find([]string{role, "serve"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		cmd.Flags().AddFlagSet(root.PersistentFlags())
+		if err := cmd.Flags().Set("config", path+".missing"); err != nil {
+			t.Fatal(err)
+		}
+		cmd.Flags().Lookup("config").Changed = false
+		o := &options{paths: job.DefaultPaths()}
+		o.paths.Config = path + ".missing"
+		if err := o.configure(cmd); err != nil {
+			t.Fatal(err)
+		}
+		want := filepath.Join(o.paths.State, role+".sock")
+		if o.paths.Socket != want {
+			t.Fatal(o.paths.Socket, want)
+		}
+		if role == "worker" && !strings.HasSuffix(o.paths.State, "relay-job-worker") {
+			t.Fatal(o.paths.State)
+		}
+	}
+}
+
+func TestInstalledServiceReloadsTOML(t *testing.T) {
+	if err := exec.Command("systemctl", "--user", "show-environment").Run(); err != nil {
+		t.Skip("requires user systemd")
+	}
+	path, cfg := configFixture(t)
+	if err := writeTOML(path, cfg); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("XDG_DATA_HOME", filepath.Join(filepath.Dir(path), "data"))
+	name := "relay-job-config-" + job.NewID() + ".service"
+	configHome := os.Getenv("XDG_CONFIG_HOME")
+	if configHome == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			t.Fatal(err)
+		}
+		configHome = filepath.Join(home, ".config")
+	}
+	t.Cleanup(func() {
+		exec.Command("systemctl", "--user", "stop", name).Run()
+		exec.Command("systemctl", "--user", "disable", name).Run()
+		os.Remove(filepath.Join(configHome, "systemd/user", name))
+		exec.Command("systemctl", "--user", "daemon-reload").Run()
+	})
+	if _, stderr, code := execute(context.Background(), "service", "install", "--role", "worker", "--name", name, "--binary", integrationBinary, "--config", path); code != 0 {
+		t.Fatal(code, stderr)
+	}
+	for _, slots := range []int{2, 4} {
+		if slots == 4 {
+			cfg.Worker.Slots = new(slots)
+			if err := writeTOML(path, cfg); err != nil {
+				t.Fatal(err)
+			}
+			if out, err := exec.Command("systemctl", "--user", "restart", name).CombinedOutput(); err != nil {
+				t.Fatal(string(out), err)
+			}
+		}
+		rpc := job.NewRPC(cfg.Paths.Socket)
+		var h job.Health
+		deadline := time.Now().Add(5 * time.Second)
+		for {
+			if err := rpc.Call(context.Background(), "GET", "/health", nil, &h); err == nil && h.Slots == slots {
+				break
+			}
+			if time.Now().After(deadline) {
+				t.Fatal("installed service ignored TOML", h)
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		rpc.Close()
+	}
+}

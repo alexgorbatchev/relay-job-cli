@@ -1,0 +1,19 @@
+# User configuration: ~/.config/relay-job/config.toml
+# Paths are optional; relative values resolve from this file's directory.
+# Workers default to separate relay-job-worker state/cache directories.
+
+[worker]
+slots = 2
+
+[retention]
+logs = "168h"
+workspaces = "720h"
+interval = "1h"
+
+# Replace the SSH alias and socket with the worker account's settings.
+# Omit host for a local Unix socket.
+[[workers]]
+name = "linux"
+host = "build-worker"
+socket = "/home/runner/.local/state/relay-job-worker/worker.sock"
+labels = ["linux", "amd64"]

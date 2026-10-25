@@ -1,0 +1,9 @@
+[jobs.test]
+command = ["just", "test-local"]
+workers = ["linux"]
+requires = ["just"]
+unavailable = "fail"
+exclude = ["node_modules/", ".venv/", "bin/", ".tmp/", "__pycache__/"]
+
+# [jobs.test.env]
+# EXAMPLE_MODE = "test"

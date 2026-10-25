@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Enable Linux user manager
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sudo loginctl enable-linger "$USER"
+          sudo systemctl start "user@$(id -u).service"
+          export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+          export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
+          systemctl --user show-environment >/dev/null
+          echo "XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR" >> "$GITHUB_ENV"
+          echo "DBUS_SESSION_BUS_ADDRESS=$DBUS_SESSION_BUS_ADDRESS" >> "$GITHUB_ENV"
+      - name: Module hygiene
+        run: go mod tidy -diff
+      - name: Build
+        run: go build ./...
+      - name: Static analysis
+        run: go vet ./...
+      - name: Race and native execution tests
+        run: go test -count=1 -race -coverpkg=./... -coverprofile=coverage.out ./...
+      - name: Require Linux statement coverage
+        if: runner.os == 'Linux'
+        run: |
+          go tool cover -func=coverage.out | awk '$1 == "total:" { sub(/%$/, "", $3); found=1; printf "Coverage: %s%%\n", $3; if ($3+0 < 90) exit 1 } END { if (!found) exit 1 }'

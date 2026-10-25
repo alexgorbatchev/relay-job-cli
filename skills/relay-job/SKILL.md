@@ -1,0 +1,184 @@
+---
+name: relay-job
+description: Use when submitting remote commands, configuring workers, inspecting job receipts, recovering interrupted output, or installing relay-job user services.
+author: alexgorbatchev
+metadata:
+  created_on: 2026-10-22 22:15
+  last_modified: 2026-10-25 06:10
+  status: current
+---
+
+Run batch commands in persistent Linux or macOS worker workspaces. Set `AGENT=1` for compact help and errors. Job stdout/stderr remain original bytes in both modes.
+
+## `relay-job`
+
+Invoke without arguments for help. Global flags apply to every command:
+
+| Flag | Type | Default | Purpose |
+| --- | --- | --- | --- |
+| `--config` | string | `$XDG_CONFIG_HOME/relay-job/config.toml` | Worker list; config base falls back to `~/.config`. |
+| `--state` | string | `$XDG_STATE_HOME/relay-job` | Durable records; base falls back to `~/.local/state`. |
+| `--cache` | string | `$XDG_CACHE_HOME/relay-job` | Worker workspaces; base falls back to `~/.cache`. |
+| `--socket` | string | `<default-state>/coordinator.sock` | Runtime default follows effective state; workers use worker.sock. |
+| `--help` | bool | false | Print command help; `-h`. |
+| `--version` | bool | false | Print raw version and newline; `-v`. |
+
+CLI flags override strict TOML user settings. Missing default configuration is optional except the coordinator needs workers; an explicitly selected missing config fails. Relative `[paths]` values resolve beside the config file and expand a leading `~`. CLI paths resolve from the caller's directory. The socket default follows effective state; worker serve and worker service install use separate `relay-job-worker` state/cache directories and `worker.sock`. Explicit paths override these defaults; keep different instances separate. Unix socket paths must fit the OS limit. Commands use current-user permissions without interactive stdin or TTY.
+
+## `relay-job coordinator`
+
+Manage the primary machine's coordinator.
+
+## `relay-job coordinator serve`
+
+Read the worker config and serve until SIGINT/SIGTERM/SIGHUP. Recover durable jobs by their existing IDs. Requires `ssh`, `rsync`, and the OS's native manager for local fallback. Worker configuration:
+
+```toml
+[[workers]]
+name = "build"
+host = "build-worker"
+socket = "/home/runner/.local/state/relay-job-worker/worker.sock"
+labels = ["linux"]
+```
+
+Optional user tables: `[paths]` accepts `state`, `cache`, `socket`; `[worker]` accepts positive `slots`; `[retention]` accepts duration strings `logs`, `workspaces`, `interval`. They supply defaults for the corresponding serve/install flags. Unknown keys and invalid values fail. Services reread TOML on restart; explicit installation flags remain overrides.
+
+Use SSH aliases with preconfigured keys and trusted host keys. An omitted `host` connects to a local worker socket, useful for additional local agents. Worker names are unique; `local` identifies fallback and is reserved. Configure multiple entries to enable scheduling. Prefer matching workers with warm workspaces, then lower occupancy. Busy workers queue jobs. SSH connection setup is bounded to two seconds per worker and happens concurrently during selection. Authentication, host-key, protocol, and missing-tool errors require configuration repair.
+
+For mixed operating systems, specify `--workers` or `--labels` on platform-dependent jobs. Without either filter, any configured worker is eligible. Exclude host-built dependencies and caches before synchronizing to another OS.
+
+Configure automatic cleanup on `coordinator serve`, `worker serve`, or `service install`:
+
+| Flag | Type | Default | Purpose |
+| --- | --- | --- | --- |
+| `--log-retention` | duration | 168h0m0s | Expire completed-job logs after seven days; 0 disables expiry. |
+| `--workspace-retention` | duration | 720h0m0s | Delete tracked worker workspaces after thirty idle days; 0 disables expiry. |
+| `--cleanup-interval` | duration | 1h0m0s | Positive interval between cleanup passes; also run at service startup. |
+
+Use Go durations such as `24h` or `30m`, not `7d`. Both retention periods must be nonnegative. Each remote worker owns its workspace policy; the coordinator never deletes fallback's original checkout. Worker logs remain until the coordinator acknowledges durable collection. Active or unresolved jobs and held workspace locks protect data. Keep receipts, `started` markers, and lock files indefinitely: they prevent replay of an old ID. Expired log requests fail with HTTP 410; status and same-ID replay protection remain available. Workspace removal includes preserved dependency directories, so bootstrap dependencies on the next job. Untracked directories and workspace symlinks are not removed.
+
+## `relay-job worker`
+
+Manage worker agents.
+
+## `relay-job worker serve`
+
+Serve a private worker API. Supply distinct `--socket`, `--state`, and `--cache` when hosting multiple agents on one machine. Linux requires `systemd-run`, `systemctl` and a running user manager. macOS requires native `launchctl`, `plutil` and a user domain. Both require rsync with protected-argument support and the job's toolchain. Install workspace dependencies from lockfiles or through a bootstrap job.
+
+On macOS, commands and execution supervisors have separate native launchd jobs. Agent restarts preserve execution; supervisor loss stops the command and reports a lost receipt.
+
+| Flag | Type | Default | Purpose |
+| --- | --- | --- | --- |
+| `--slots` | int | 1 | Positive simultaneous reservation/execution limit. |
+| `--log-retention` | duration | 168h0m0s | Expire completed logs after seven days; 0 disables expiry. |
+| `--workspace-retention` | duration | 720h0m0s | Delete tracked workspaces after thirty idle days; 0 disables expiry. |
+| `--cleanup-interval` | duration | 1h0m0s | Positive interval; also clean at startup. |
+
+## `relay-job worker list`
+
+Ask the coordinator for each configured worker's health, occupancy, protocol, and connection error. Print JSON; inspect each entry's error field. Checking health creates reusable SSH tunnels.
+
+## `relay-job job`
+
+Submit and inspect durable jobs.
+
+## `relay-job job exec -- <command...>`
+
+Submit literal executable arguments after `--`. Generate an ID before submission and print `job: <id>` to stderr. Keep this ID if any reply is lost. Default strict mode fails when all eligible workers are unreachable. A command's nonzero exit code never triggers fallback. After a start request, recover that ID rather than replaying elsewhere.
+
+| Flag | Type | Default | Purpose |
+| --- | --- | --- | --- |
+| `--source` | string | . | Source directory, including dirty and untracked files. |
+| `--project` | string | relay-job.toml | Named-job file relative to source; used by `job run`. |
+| `--id` | string | empty | Reconcile/reuse a generated 32-character lowercase hex ID with the same request. |
+| `--unavailable` | string | fail | `fail` or explicit `local` fallback before execution submission. |
+| `--detach` | bool | false | Submit and print a JSON receipt without following. |
+| `--quiet` | bool | false | Omit the job ID prefix from stderr; use `--id` when retaining an ID is necessary. |
+| `--workers` | stringSlice | [] | Comma-separated eligible worker names. |
+| `--exclude` | stringSlice | [] | Rsync patterns excluded from source and protected from deletion remotely. |
+| `--requires` | stringSlice | [] | Required worker executables on PATH. |
+| `--labels` | stringSlice | [] | Required worker labels. |
+| `--env` | stringArray | [] | Repeat KEY=VALUE to set command environment. |
+
+Synchronization checksums files, updates modes, and deletes removed source files. `.git/` is always excluded. Specify dependency/cache exclusions explicitly; do not copy host-built dependencies to another platform. Source reads must remain stable during synchronization; this tool does not freeze files edited concurrently. Each source directory has a distinct workspace identity. Worker reservation spans sync and execution.
+
+Follow preserves separate binary stdout/stderr, with no cross-stream ordering guarantee. Exit status is the command's status, 130 for canceled jobs, 125 for infrastructure failure or lost execution, and 1 for CLI/API errors. SIGINT/SIGTERM/SIGHUP requests cancellation; an unconfirmed cancellation prints recovery instructions. Detached jobs continue when the client exits. Logs expire under the service's retention policy; receipts persist.
+
+## `relay-job job run <name>`
+
+Read the named job from `relay-job.toml` in the source directory. Accept the same flags as `job exec`; provided overrides replace corresponding job settings. Use separate local recipes to avoid recursive wrappers:
+
+```toml
+[jobs.test]
+command = ["just", "test-local"]
+workers = ["build"]
+unavailable = "local"
+exclude = ["node_modules/", ".venv/", "bin/", ".tmp/"]
+requires = ["just"]
+```
+
+Additional job fields: `env` is a string map; `cwd` is a relative directory inside the synchronized workspace; `labels` and `requires` constrain scheduling. Local fallback uses the original source directory and requires its own toolchain/dependencies. Sync failures and configuration errors fail explicitly.
+
+## `relay-job job status <id>`
+
+Print the coordinator's durable JSON receipt with ID, state, worker, exit code, error, and `logs_expired: true` after cleanup. A worker outage after submission keeps the job pending reconciliation, with an explanatory error; it is not safe to start another copy. `lost` means the execution unit disappeared without a completion receipt. Repair the worker connection and recheck before manually deciding to submit a new ID.
+
+## `relay-job job logs <id>`
+
+Replay saved stdout/stderr from the beginning.
+
+| Flag | Type | Default | Purpose |
+| --- | --- | --- | --- |
+| `--follow` | bool | false | Continue until completion and return command status. |
+
+## `relay-job job cancel <id>`
+
+Cancel queued work or stop the worker's native execution jobs and their descendants. Print the resulting receipt. An unreachable worker makes cancellation unconfirmed; reconnect and retry with the same ID.
+
+## `relay-job service`
+
+Manage reproducible user-service installation.
+
+## `relay-job service install`
+
+On Linux, copy the running binary into `$XDG_DATA_HOME/relay-job/bin/relay-job` (base defaults to `~/.local/share`), write `$XDG_CONFIG_HOME/systemd/user/relay-job-<role>.service`, reload the user manager, enable/start, and verify active status. The unit captures PATH and explicit CLI overrides. Services reread TOML on restart. Restart an already active service with `systemctl --user restart relay-job-<role>` after reinstalling the binary. Inspect `loginctl show-user "$USER" -p Linger` if services must survive logout; enabling lingering is a separate host configuration action. This command rejects macOS before changing files; use the repository's `examples/launchd-worker.plist` as a LaunchAgent template with the correct absolute executable and tool PATH. That example starts at GUI login, not system boot.
+
+| Flag | Type | Default | Purpose |
+| --- | --- | --- | --- |
+| `--role` | string | empty | Required: coordinator or worker. |
+| `--slots` | int | 1 | Positive worker concurrency limit. |
+| `--name` | string | empty | Custom service unit name ending in `.service`; defaults to `relay-job-<role>.service`. |
+| `--binary` | string | empty | Binary to install; defaults to the running executable. |
+| `--log-retention` | duration | 168h0m0s | Persist completed-log lifetime in the installed service; 0 disables expiry. |
+| `--workspace-retention` | duration | 720h0m0s | Persist worker idle lifetime; 0 disables expiry. |
+| `--cleanup-interval` | duration | 1h0m0s | Persist a positive cleanup interval. |
+
+Choose an XDG data directory without quotes, backslashes, or control characters; systemd rejects those characters in an executable path. Spaces, percent signs, and literal dollar signs are supported. Service arguments and PATH values use systemd quoting with environment substitution disabled for the command line.
+
+## `relay-job skill`
+
+Print the Skills CLI installation command and canonical skill URL, identically in both modes, without network access. Read the URL using authenticated repository access when required.
+
+## `relay-job help [command]`
+
+Print help for a command path. All public commands accept `--help`/`-h`.
+
+## `relay-job completion`
+
+Print shell-completion help.
+
+## `relay-job completion bash`
+
+Print Bash completion. Accept `--no-descriptions` (bool, false).
+
+## `relay-job completion zsh`
+
+Print Zsh completion. Accept `--no-descriptions` (bool, false).
+
+## `relay-job completion fish`
+
+Print Fish completion. Accept `--no-descriptions` (bool, false).
+
+## `relay-job completion powershell`
+
+Print PowerShell completion. Accept `--no-descriptions` (bool, false).
