@@ -1,6 +1,6 @@
 ---
 created_on: 2026-10-25 05:51
-last_modified: 2026-10-25 06:10
+last_modified: 2026-10-25 06:38
 status: current
 ---
 
@@ -41,6 +41,7 @@ Generic Linux/macOS batch runner. Executable: `relay-job`.
 
 - CI runs on main and pull requests. Version tags run verification before GoReleaser publishes Linux/macOS amd64/arm64 archives and checksums.
 - Add `docs/releases/<tag>.md` before tagging. Release notes describe shipped behavior, without generated commit lists.
+- Keep GoReleaser changelog processing enabled: `--release-notes` supplies the curated text, while `changelog.disable` would discard it.
 - Build tagged artifacts locally with `goreleaser release --clean --skip=publish --release-notes docs/releases/<tag>.md`. Inspect archives and verify checksums before publishing.
 - Publishing requires explicit user authorization. Keep binaries, caches, coverage, job state, credentials and environment files out of Git.
 - Never publish private internal domains, host identities, network addresses or source history. Use generic examples and a fresh repository history.
