@@ -11,6 +11,7 @@ permissions:
 
 jobs:
   verify:
+    timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
@@ -39,7 +40,7 @@ jobs:
       - name: Static analysis
         run: go vet ./...
       - name: Race and native execution tests
-        run: go test -count=1 -race -coverpkg=./... -coverprofile=coverage.out ./...
+        run: go test -v -count=1 -timeout=2m -race -coverpkg=./... -coverprofile=coverage.out ./...
       - name: Require Linux statement coverage
         if: runner.os == 'Linux'
         run: |
