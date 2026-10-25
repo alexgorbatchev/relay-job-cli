@@ -264,6 +264,7 @@ func TestExecutionBytesAndOnce(t *testing.T) {
 	}{
 		{"binary", "printf '\357\273\277 \\000\\377\\n'; printf '\\000err \\r\\n' >&2; exit 37", 37},
 		{"success", "printf '%s' \"$VALUE\"; pwd", 0}, {"missing", "exec /does/not/exist", missingExit.ExitCode()},
+		{"sysexits status", "exit 78", 78},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			w := worker(t, 1)

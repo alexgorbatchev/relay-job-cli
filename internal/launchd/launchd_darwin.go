@@ -19,11 +19,6 @@ type Spec struct {
 	KeepAlive                        bool
 }
 
-type State struct {
-	Exists, Active, Exited bool
-	ExitCode               int
-}
-
 func Domain() string { return "user/" + strconv.Itoa(os.Getuid()) }
 
 func invoke(ctx context.Context, command string, args ...string) ([]byte, error) {
@@ -45,8 +40,11 @@ func Write(ctx context.Context, path string, spec Spec) error {
 	fields := map[string]any{
 		"Label": spec.Label, "ProgramArguments": spec.Arguments, "RunAtLoad": true,
 		"KeepAlive": spec.KeepAlive, "AbandonProcessGroup": false, "ExitTimeOut": 10,
-		"Umask": 63, "ProcessType": "Background", "EnvironmentVariables": spec.Environment,
+		"Umask": 63, "ProcessType": "Background",
 		"LimitLoadToSessionType": "Background",
+	}
+	if len(spec.Environment) > 0 {
+		fields["EnvironmentVariables"] = spec.Environment
 	}
 	for key, value := range map[string]string{"WorkingDirectory": spec.Directory, "StandardOutPath": spec.Stdout, "StandardErrorPath": spec.Stderr} {
 		if value != "" {
@@ -81,37 +79,7 @@ func Inspect(ctx context.Context, label string) (State, error) {
 		}
 		return State{}, fmt.Errorf("inspect launchd job: %w: %s", err, out)
 	}
-	state := State{Exists: true, Active: true}
-	for _, line := range strings.Split(string(out), "\n") {
-		key, value, ok := strings.Cut(strings.TrimSpace(line), " = ")
-		if !ok {
-			continue
-		}
-		switch key {
-		case "state":
-			state.Active = value != "not running" && value != "exited"
-		case "last exit code":
-			if value == "(never exited)" {
-				continue
-			}
-			code, parseErr := strconv.Atoi(value)
-			if parseErr != nil {
-				return State{}, fmt.Errorf("invalid launchd exit status %q: %w", value, parseErr)
-			}
-			state.Exited, state.ExitCode = true, code
-		case "last terminating signal":
-			_, number, found := strings.Cut(value, ": ")
-			if !found {
-				return State{}, fmt.Errorf("invalid launchd terminating signal %q", value)
-			}
-			code, parseErr := strconv.Atoi(number)
-			if parseErr != nil {
-				return State{}, fmt.Errorf("invalid launchd terminating signal %q: %w", value, parseErr)
-			}
-			state.Exited, state.ExitCode = true, 128+code
-		}
-	}
-	return state, nil
+	return parseState(string(out))
 }
 
 func Stop(ctx context.Context, label string) ([]byte, error) {
