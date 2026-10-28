@@ -9,7 +9,7 @@ import (
 )
 
 func TestTOMLConfiguration(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "config.toml")
+	path := filepath.Join(t.TempDir(), "relay-jobs.toml")
 	text := `[paths]
 state = "state"
 cache = "~/cache"
@@ -67,7 +67,7 @@ socket = "/tmp/worker.sock"`,
 }
 
 func TestTOMLProject(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "relay-job.toml")
+	path := filepath.Join(t.TempDir(), "relay-jobs.toml")
 	text := `[jobs.test]
 command = ["sh", "-c", "printf '%s' $VALUE"]
 cwd = "src"
@@ -98,7 +98,7 @@ VALUE = "hello"
 }
 
 func TestConfigRelativePaths(t *testing.T) {
-	config := filepath.Join(t.TempDir(), "config.toml")
+	config := filepath.Join(t.TempDir(), "relay-jobs.toml")
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	for _, tc := range []struct{ value, want string }{

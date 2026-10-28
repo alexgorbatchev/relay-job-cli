@@ -9,12 +9,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/alexgorbatchev/relay-job-cli/internal/job"
+	"github.com/alexgorbatchev/relay-jobs-cli/internal/job"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
 
-var version = "0.1.0"
+var version = "1.0.0"
 
 type options struct {
 	paths    job.Paths
@@ -27,7 +27,7 @@ func (e exitError) Error() string { return fmt.Sprintf("job exited %d", int(e)) 
 
 func newRootCommand() *cobra.Command {
 	o := &options{paths: job.DefaultPaths()}
-	root := &cobra.Command{Use: "relay-job", Short: "Run commands in persistent remote workspaces", Version: version, SilenceUsage: true, SilenceErrors: true, Args: cobra.NoArgs, RunE: func(c *cobra.Command, _ []string) error { return c.Help() }}
+	root := &cobra.Command{Use: "relay-jobs", Short: "Run commands in persistent remote workspaces", Version: version, SilenceUsage: true, SilenceErrors: true, Args: cobra.NoArgs, RunE: func(c *cobra.Command, _ []string) error { return c.Help() }}
 	root.SetVersionTemplate("{{.Version}}\n")
 	root.PersistentPreRunE = func(c *cobra.Command, _ []string) error {
 		if c.Name() == "skill" {
@@ -203,7 +203,7 @@ func (o *options) runCommand(named bool) *cobra.Command {
 		return follow(c, rpc, id, true)
 	}}
 	c.Flags().StringVar(&source, "source", ".", "Project source directory")
-	c.Flags().StringVar(&project, "project", "relay-job.toml", "Project job file relative to source")
+	c.Flags().StringVar(&project, "project", "relay-jobs.toml", "Project job file relative to source")
 	c.Flags().StringVar(&id, "id", "", "Use a previously generated job ID")
 	c.Flags().StringVar(&policy, "unavailable", "fail", "No reachable worker: fail or local")
 	c.Flags().BoolVar(&detached, "detach", false, "Submit without following output")

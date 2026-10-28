@@ -8,13 +8,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/alexgorbatchev/relay-job-cli/internal/launchd"
+	"github.com/alexgorbatchev/relay-jobs-cli/internal/launchd"
 )
 
 func TestDarwinCompletedNativeJobState(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
-	label := "com.relay-job.probe." + NewID()
+	label := "com.relay-jobs.probe." + NewID()
 	dir := t.TempDir()
 	marker := filepath.Join(dir, "done")
 	plist := filepath.Join(dir, "job.plist")

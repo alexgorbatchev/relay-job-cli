@@ -51,13 +51,13 @@ func TestDispatchFailureBoundaries(t *testing.T) {
 				config.Workers = append(config.Workers, WorkerConfig{Name: "second", Socket: endpoint(t, second.Handler())})
 			}
 			if mode == "local launch rejected" {
-				config.Workers[0].Socket = "/missing/relay-job.sock"
+				config.Workers[0].Socket = "/missing/relay-jobs.sock"
 				req.Spec.Unavailable = "local"
 			}
 			c := NewCoordinator(Paths{State: t.TempDir()}, config, testBinary)
 			defer c.Close()
 			if mode == "local launch rejected" {
-				c.Local.Binary = "/nonexistent/relay-job"
+				c.Local.Binary = "/nonexistent/relay-jobs"
 			}
 			if mode == "sync rejected" || mode == "cleanup reply lost" {
 				os.Chmod(req.Source, 0000)

@@ -49,8 +49,8 @@ func DefaultPaths() Paths {
 		}
 		return filepath.Join(home, fallback)
 	}
-	state := filepath.Join(dir("XDG_STATE_HOME", ".local/state"), "relay-job")
-	return Paths{State: state, Cache: filepath.Join(dir("XDG_CACHE_HOME", ".cache"), "relay-job"), Socket: filepath.Join(state, "coordinator.sock"), Config: filepath.Join(dir("XDG_CONFIG_HOME", ".config"), "relay-job/config.toml")}
+	state := filepath.Join(dir("XDG_STATE_HOME", ".local/state"), "relay-jobs")
+	return Paths{State: state, Cache: filepath.Join(dir("XDG_CACHE_HOME", ".cache"), "relay-jobs"), Socket: filepath.Join(state, "coordinator.sock"), Config: filepath.Join(dir("XDG_CONFIG_HOME", ".config"), "relay-jobs/relay-jobs.toml")}
 }
 
 type WorkerConfig struct {

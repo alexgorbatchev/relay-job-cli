@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/alexgorbatchev/relay-job-cli/internal/launchd"
+	"github.com/alexgorbatchev/relay-jobs-cli/internal/launchd"
 )
 
-func Unit(id string) string        { return "com.relay-job.task." + id }
+func Unit(id string) string        { return "com.relay-jobs.task." + id }
 func commandUnit(id string) string { return Unit(id) + ".command" }
 
 func startExecution(ctx context.Context, binary string, s Store, id string) ([]byte, error) {

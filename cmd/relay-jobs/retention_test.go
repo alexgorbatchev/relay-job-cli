@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/alexgorbatchev/relay-job-cli/internal/job"
+	"github.com/alexgorbatchev/relay-jobs-cli/internal/job"
 )
 
 func TestRetentionCLI(t *testing.T) {

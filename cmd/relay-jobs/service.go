@@ -9,7 +9,7 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/alexgorbatchev/relay-job-cli/internal/job"
+	"github.com/alexgorbatchev/relay-jobs-cli/internal/job"
 	"github.com/spf13/cobra"
 )
 
@@ -69,7 +69,7 @@ func (o *options) serviceCommand() *cobra.Command {
 			configHome = filepath.Join(home, ".config")
 		}
 		if name == "" {
-			name = "relay-job-" + role + ".service"
+			name = "relay-jobs-" + role + ".service"
 		}
 		if !regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]*\.service$`).MatchString(name) {
 			return fmt.Errorf("invalid unit name")
@@ -88,8 +88,8 @@ func (o *options) serviceCommand() *cobra.Command {
 		if dataHome == "" {
 			dataHome = filepath.Join(home, ".local/share")
 		}
-		binDir := filepath.Join(dataHome, "relay-job/bin")
-		target := filepath.Join(binDir, "relay-job")
+		binDir := filepath.Join(dataHome, "relay-jobs/bin")
+		target := filepath.Join(binDir, "relay-jobs")
 		if strings.ContainsAny(target, "'\"\\") || strings.IndexFunc(target, func(r rune) bool { return r < ' ' || r == 0x7f }) >= 0 {
 			return fmt.Errorf("systemd executable paths cannot contain quotes, backslashes, or control characters; choose another XDG_DATA_HOME")
 		}
@@ -160,7 +160,7 @@ func (o *options) serviceCommand() *cobra.Command {
 	retention = retentionFlags(install)
 	install.Flags().StringVar(&role, "role", "", "Service role: coordinator or worker")
 	install.Flags().IntVar(&slots, "slots", 1, "Maximum concurrent worker jobs")
-	install.Flags().StringVar(&name, "name", "", "Unit name, default relay-job-<role>.service")
+	install.Flags().StringVar(&name, "name", "", "Unit name, default relay-jobs-<role>.service")
 	install.Flags().StringVar(&binary, "binary", "", "Binary to install, default current executable")
 	group.AddCommand(install)
 	return group

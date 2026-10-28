@@ -1,20 +1,20 @@
 ---
 created_on: 2026-10-25 05:51
-last_modified: 2026-10-25 06:38
+last_modified: 2026-10-28 09:32
 status: current
 ---
 
-# relay-job-cli
+# relay-jobs-cli
 
-Generic Linux/macOS batch runner. Executable: `relay-job`.
+Generic Linux/macOS batch runner. Executable: `relay-jobs`.
 
 ## Development
 
 - Use Go 1.27.3+, OpenSSH, rsync and just. `just setup` downloads module dependencies; it does not install system packages.
-- `just build` writes `bin/relay-job`; `just run` and `just run-ai` invoke the CLI.
+- `just build` writes `bin/relay-jobs`; `just run` and `just run-ai` invoke the CLI.
 - `just check` runs module hygiene, vet and race-enabled tests, enforcing 90% combined statement coverage. Change behavioral tests whenever behavior changes. Use real temporary files, sockets and native supervisors.
 - Linux lifecycle tests require an active systemd user manager. macOS native tests require the launchd user domain. CI verifies the Linux manager before testing. Permission tests skip when running as root.
-- Real SSH tests use `RELAY_JOB_SSH_TEST_HOST` and `RELAY_JOB_SSH_TEST_SOCKET`; point them at an isolated matching worker. Cross-compiled tests accept `RELAY_JOB_TEST_BINARY`.
+- Real SSH tests use `RELAY_JOBS_SSH_TEST_HOST` and `RELAY_JOBS_SSH_TEST_SOCKET`; point them at an isolated matching worker. Cross-compiled tests accept `RELAY_JOBS_TEST_BINARY`.
 
 ## Contracts
 
@@ -33,7 +33,7 @@ Generic Linux/macOS batch runner. Executable: `relay-job`.
 ## CLI and documentation
 
 - Use Cobra with cobra-help-tree, positional-argument metadata, bounded human help, compact agent help, and raw `--version` output.
-- Canonical usage skill: `skills/relay-job/SKILL.md`. `relay-job skill` prints its GitHub installation command and URL identically in both modes, offline. Never embed or duplicate the skill.
+- Canonical usage skill: `skills/relay-jobs/SKILL.md`. `relay-jobs skill` prints its GitHub installation command and URL identically in both modes, offline. Never embed or duplicate the skill.
 - Update README, examples, usage skill and tests in the same change when commands, flags, defaults, TOML fields, output or side effects change. Update documentation timestamps.
 - Preserve home-directory folding in displayed paths. Keep subprocess and stored paths absolute.
 

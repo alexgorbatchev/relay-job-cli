@@ -1,6 +1,6 @@
-# User configuration: ~/.config/relay-job/config.toml
+# User configuration: ~/.config/relay-jobs/relay-jobs.toml
 # Paths are optional; relative values resolve from this file's directory.
-# Workers default to separate relay-job-worker state/cache directories.
+# Workers default to separate relay-jobs-worker state/cache directories.
 
 [worker]
 slots = 2
@@ -15,5 +15,5 @@ interval = "1h"
 [[workers]]
 name = "linux"
 host = "build-worker"
-socket = "/home/runner/.local/state/relay-job-worker/worker.sock"
+socket = "/home/runner/.local/state/relay-jobs-worker/worker.sock"
 labels = ["linux", "amd64"]

@@ -5,7 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/alexgorbatchev/relay-job-cli/internal/job"
+	"github.com/alexgorbatchev/relay-jobs-cli/internal/job"
 	"github.com/spf13/cobra"
 )
 
@@ -22,8 +22,8 @@ func (o *options) configure(c *cobra.Command) error {
 		return err
 	}
 	o.config = config
-	workerRole := c.CommandPath() == "relay-job worker serve"
-	if c.CommandPath() == "relay-job service install" {
+	workerRole := c.CommandPath() == "relay-jobs worker serve"
+	if c.CommandPath() == "relay-jobs service install" {
 		role, err := c.Flags().GetString("role")
 		if err != nil {
 			return err

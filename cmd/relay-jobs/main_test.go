@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/alexgorbatchev/relay-job-cli/internal/job"
+	"github.com/alexgorbatchev/relay-jobs-cli/internal/job"
 	"github.com/pelletier/go-toml/v2"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -26,7 +26,7 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		panic(err)
 	}
-	integrationBinary = filepath.Join(dir, "relay-job")
+	integrationBinary = filepath.Join(dir, "relay-jobs")
 	cmd := exec.Command("go", "build", "-o", integrationBinary, ".")
 	cmd.Env = append(os.Environ(), "GOWORK=off")
 	if out, err := cmd.CombinedOutput(); err != nil {
@@ -96,7 +96,7 @@ func walk(c *cobra.Command, visit func(*cobra.Command)) {
 }
 func TestSkillCoversInterface(t *testing.T) {
 	t.Setenv("AGENT", "1")
-	b, err := os.ReadFile("../../skills/relay-job/SKILL.md")
+	b, err := os.ReadFile("../../skills/relay-jobs/SKILL.md")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,8 +117,8 @@ func TestSkillCoversInterface(t *testing.T) {
 			return
 		}
 		section, _, _ = strings.Cut(section, "\n## ")
-		if c.CommandPath() == "relay-job job run" {
-			_, section, _ = strings.Cut(text, "## `relay-job job exec -- <command...>`\n")
+		if c.CommandPath() == "relay-jobs job run" {
+			_, section, _ = strings.Cut(text, "## `relay-jobs job exec -- <command...>`\n")
 			section, _, _ = strings.Cut(section, "\n## ")
 		}
 		check := func(f *pflag.Flag) {
@@ -252,7 +252,7 @@ func TestCLIJobWorkflow(t *testing.T) {
 	socket := socketServer(t, coordinator.Handler(ctx))
 	source := t.TempDir()
 	project := job.Project{Jobs: map[string]job.Spec{"example": {Command: []string{"sh", "-c", "printf '%s' \"$VALUE\"; printf err >&2; exit 37"}}}}
-	if err := writeTOML(filepath.Join(source, "relay-job.toml"), project); err != nil {
+	if err := writeTOML(filepath.Join(source, "relay-jobs.toml"), project); err != nil {
 		t.Fatal(err)
 	}
 	out, stderr, code := execute(ctx, "--socket", socket, "job", "run", "example", "--source", source, "--workers", "test", "--requires", "sh", "--labels", "linux", "--env", "VALUE=byte exact", "--exclude", "cache/", "--unavailable", "fail")

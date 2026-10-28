@@ -21,7 +21,7 @@ import (
 var testBinary string
 
 func TestMain(m *testing.M) {
-	if binary := os.Getenv("RELAY_JOB_TEST_BINARY"); binary != "" {
+	if binary := os.Getenv("RELAY_JOBS_TEST_BINARY"); binary != "" {
 		var err error
 		testBinary, err = filepath.Abs(binary)
 		if err != nil {
@@ -29,12 +29,12 @@ func TestMain(m *testing.M) {
 		}
 		os.Exit(m.Run())
 	}
-	dir, err := os.MkdirTemp("", "relay-job-test-")
+	dir, err := os.MkdirTemp("", "relay-jobs-test-")
 	if err != nil {
 		panic(err)
 	}
-	testBinary = filepath.Join(dir, "relay-job")
-	build := exec.Command("go", "build", "-o", testBinary, "../../cmd/relay-job")
+	testBinary = filepath.Join(dir, "relay-jobs")
+	build := exec.Command("go", "build", "-o", testBinary, "../../cmd/relay-jobs")
 	build.Env = append(os.Environ(), "GOWORK=off")
 	if out, err := build.CombinedOutput(); err != nil {
 		os.Stderr.Write(out)
@@ -194,7 +194,7 @@ func TestValidationAndStore(t *testing.T) {
 }
 func WorkspaceConfig(t *testing.T, c Config) (Config, error) {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), "config.toml")
+	path := filepath.Join(t.TempDir(), "relay-jobs.toml")
 	if err := writeTOML(path, c); err != nil {
 		t.Fatal(err)
 	}
@@ -391,7 +391,7 @@ func TestWorkerRPC(t *testing.T) {
 		t.Fatal("invalid offset")
 	}
 	var h Health
-	if err := rpc.Call(ctx, "GET", "/health?source="+url.QueryEscape(r.Source)+"&requires=missing-tool-relay-job", nil, &h); err != nil || len(h.Missing) != 1 || !h.Warm || h.Busy != 1 {
+	if err := rpc.Call(ctx, "GET", "/health?source="+url.QueryEscape(r.Source)+"&requires=missing-tool-relay-jobs", nil, &h); err != nil || len(h.Missing) != 1 || !h.Warm || h.Busy != 1 {
 		t.Fatalf("%+v %v", h, err)
 	}
 	if err := rpc.Call(ctx, "GET", "/jobs/"+r.ID, nil, &rec); err != nil {
@@ -496,7 +496,7 @@ func TestCoordinatorSchedulingAndRecovery(t *testing.T) {
 		t.Fatal(rec)
 	}
 	// Offline strict jobs fail, and incompatible toolchains never trigger local fallback.
-	offline := NewCoordinator(Paths{State: t.TempDir()}, Config{Workers: []WorkerConfig{{Name: "down", Socket: "/missing/relay-job.sock"}}}, testBinary)
+	offline := NewCoordinator(Paths{State: t.TempDir()}, Config{Workers: []WorkerConfig{{Name: "down", Socket: "/missing/relay-jobs.sock"}}}, testBinary)
 	defer offline.Close()
 	for _, policy := range []string{"fail", "local"} {
 		req := request(t, "printf", "fallback")
@@ -514,7 +514,7 @@ func TestCoordinatorSchedulingAndRecovery(t *testing.T) {
 		}
 	}
 	bad := request(t, "true")
-	bad.Spec.Requires = []string{"nonexistent-relay-job-tool"}
+	bad.Spec.Requires = []string{"nonexistent-relay-jobs-tool"}
 	bad.Spec.Unavailable = "local"
 	if _, err = resumed.Submit(ctx, bad); err != nil {
 		t.Fatal(err)

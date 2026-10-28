@@ -38,7 +38,7 @@ func TestSyncDiagnosticsAreBoundedAndDrained(t *testing.T) {
 	if err = runSyncCommand(exec.Command("true")); err != nil {
 		t.Fatal(err)
 	}
-	if err = runSyncCommand(exec.Command("/missing/relay-job-rsync")); err == nil {
+	if err = runSyncCommand(exec.Command("/missing/relay-jobs-rsync")); err == nil {
 		t.Fatal("missing sync binary appeared successful")
 	}
 }

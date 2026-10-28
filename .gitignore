@@ -1,7 +1,7 @@
 # Binaries
 bin/
-/relay-job
-/relay-job-cli
+/relay-jobs
+/relay-jobs-cli
 *.exe
 *.exe~
 *.dll

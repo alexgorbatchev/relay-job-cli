@@ -12,10 +12,10 @@ import (
 )
 
 func TestSSHWorker(t *testing.T) {
-	host := os.Getenv("RELAY_JOB_SSH_TEST_HOST")
-	socket := os.Getenv("RELAY_JOB_SSH_TEST_SOCKET")
+	host := os.Getenv("RELAY_JOBS_SSH_TEST_HOST")
+	socket := os.Getenv("RELAY_JOBS_SSH_TEST_SOCKET")
 	if host == "" || socket == "" {
-		t.Skip("set RELAY_JOB_SSH_TEST_HOST and RELAY_JOB_SSH_TEST_SOCKET for real SSH integration")
+		t.Skip("set RELAY_JOBS_SSH_TEST_HOST and RELAY_JOBS_SSH_TEST_SOCKET for real SSH integration")
 	}
 	transport := &Transport{Config: WorkerConfig{Name: "ssh", Host: host, Socket: socket}}
 	t.Cleanup(transport.Close)

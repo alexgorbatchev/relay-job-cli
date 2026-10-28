@@ -1,4 +1,4 @@
-module github.com/alexgorbatchev/relay-job-cli
+module github.com/alexgorbatchev/relay-jobs-cli
 
 go 1.27.3
 

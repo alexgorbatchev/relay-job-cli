@@ -11,15 +11,15 @@ setup:
 # Build the CLI
 build:
     mkdir -p bin
-    go build -o bin/relay-job ./cmd/relay-job
+    go build -o bin/relay-jobs ./cmd/relay-jobs
 
 # Run in human mode
 run *args:
-    go run ./cmd/relay-job {{ args }}
+    go run ./cmd/relay-jobs {{ args }}
 
 # Run in agent mode
 run-ai *args:
-    AGENT=1 go run ./cmd/relay-job {{ args }}
+    AGENT=1 go run ./cmd/relay-jobs {{ args }}
 
 # Run behavioral tests with the race detector
 test:
@@ -44,5 +44,5 @@ check: lint
 # Cross-compile a native macOS worker and test executable
 build-macos:
     mkdir -p bin
-    GOOS=darwin GOARCH=amd64 go build -o bin/relay-job-darwin-amd64 ./cmd/relay-job
-    GOOS=darwin GOARCH=amd64 go test -c -o bin/relay-job-darwin-test ./internal/job
+    GOOS=darwin GOARCH=amd64 go build -o bin/relay-jobs-darwin-amd64 ./cmd/relay-jobs
+    GOOS=darwin GOARCH=amd64 go test -c -o bin/relay-jobs-darwin-test ./internal/job

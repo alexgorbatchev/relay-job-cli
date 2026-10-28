@@ -344,7 +344,7 @@ func TestExecutionFailureBoundaries(t *testing.T) {
 			os.Symlink(t.TempDir(), filepath.Join(r.Workspace, "escape"))
 			r.Spec.Cwd = "escape"
 		}},
-		{"missing program", func(t *testing.T, w *Worker, r *Record) { r.Spec.Command = []string{"relay-job-no-such-executable"} }},
+		{"missing program", func(t *testing.T, w *Worker, r *Record) { r.Spec.Command = []string{"relay-jobs-no-such-executable"} }},
 		{"stdout directory", func(t *testing.T, w *Worker, r *Record) { os.MkdirAll(w.Store.Path(r.ID, "stdout"), 0700) }},
 		{"stderr directory", func(t *testing.T, w *Worker, r *Record) { os.MkdirAll(w.Store.Path(r.ID, "stderr"), 0700) }},
 	} {

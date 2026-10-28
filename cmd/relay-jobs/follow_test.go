@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/alexgorbatchev/relay-job-cli/internal/job"
+	"github.com/alexgorbatchev/relay-jobs-cli/internal/job"
 )
 
 func TestFollowCancellationAndLargeOutput(t *testing.T) {
@@ -54,7 +54,7 @@ func TestFollowCancellationAndLargeOutput(t *testing.T) {
 			t.Fatalf("signal cancellation: %v", err)
 		}
 	}
-	rpc := job.NewRPC("/missing/relay-job.sock")
+	rpc := job.NewRPC("/missing/relay-jobs.sock")
 	defer rpc.Close()
 	c := newRootCommand()
 	c.SetContext(ctx)

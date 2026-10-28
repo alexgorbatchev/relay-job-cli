@@ -7,8 +7,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const skillURL = "https://github.com/alexgorbatchev/relay-job-cli/tree/main/skills/relay-job"
-const skillContent = "Install the relay-job skill using the Skills CLI:\n\n  npx skills add alexgorbatchev/relay-job-cli --skill relay-job\n\nSkill:\n\n  " + skillURL + "\n"
+const skillURL = "https://github.com/alexgorbatchev/relay-jobs-cli/tree/main/skills/relay-jobs"
+const skillContent = "Install the relay-jobs skill using the Skills CLI:\n\n  npx skills add alexgorbatchev/relay-jobs-cli --skill relay-jobs\n\nSkill:\n\n  " + skillURL + "\n"
 
 func newSkillCommand() *cobra.Command {
 	return &cobra.Command{

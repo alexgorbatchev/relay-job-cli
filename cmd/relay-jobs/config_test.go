@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/alexgorbatchev/relay-job-cli/internal/job"
+	"github.com/alexgorbatchev/relay-jobs-cli/internal/job"
 )
 
 func configFixture(t *testing.T) (string, job.Config) {
@@ -19,7 +19,63 @@ func configFixture(t *testing.T) (string, job.Config) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { os.RemoveAll(dir) })
-	return filepath.Join(dir, "config.toml"), job.Config{Paths: job.PathConfig{State: filepath.Join(dir, "state"), Cache: filepath.Join(dir, "cache"), Socket: filepath.Join(dir, "api")}, Worker: job.WorkerSettings{Slots: new(2)}, Retention: job.RetentionSettings{Logs: new("1h"), Workspaces: new("0"), Interval: new("10ms")}}
+	return filepath.Join(dir, "relay-jobs.toml"), job.Config{Paths: job.PathConfig{State: filepath.Join(dir, "state"), Cache: filepath.Join(dir, "cache"), Socket: filepath.Join(dir, "api")}, Worker: job.WorkerSettings{Slots: new(2)}, Retention: job.RetentionSettings{Logs: new("1h"), Workspaces: new("0"), Interval: new("10ms")}}
+}
+
+func TestWorkerDiscoversDefaultConfiguration(t *testing.T) {
+	for _, xdg := range []bool{false, true} {
+		t.Run(map[bool]string{false: "home", true: "xdg"}[xdg], func(t *testing.T) {
+			dir, err := os.MkdirTemp("", "rj-default-")
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { os.RemoveAll(dir) })
+			t.Setenv("HOME", dir)
+			configBase, stateBase := filepath.Join(dir, ".config"), filepath.Join(dir, ".local/state")
+			for _, name := range []string{"XDG_CONFIG_HOME", "XDG_STATE_HOME", "XDG_CACHE_HOME"} {
+				t.Setenv(name, "")
+			}
+			if xdg {
+				configBase, stateBase = filepath.Join(dir, "config"), filepath.Join(dir, "state")
+				t.Setenv("XDG_CONFIG_HOME", configBase)
+				t.Setenv("XDG_STATE_HOME", stateBase)
+				t.Setenv("XDG_CACHE_HOME", filepath.Join(dir, "cache"))
+			}
+			configDir := filepath.Join(configBase, "relay-jobs")
+			if err := os.MkdirAll(configDir, 0700); err != nil {
+				t.Fatal(err)
+			}
+			if err := writeTOML(filepath.Join(configDir, "relay-jobs.toml"), job.Config{Worker: job.WorkerSettings{Slots: new(3)}}); err != nil {
+				t.Fatal(err)
+			}
+			ctx, cancel := context.WithCancel(context.Background())
+			done := make(chan struct{})
+			go func() {
+				defer close(done)
+				_, stderr, code := execute(ctx, "worker", "serve")
+				if code != 0 {
+					t.Errorf("worker failed: %d %s", code, stderr)
+				}
+			}()
+			t.Cleanup(func() { cancel(); <-done })
+			rpc := job.NewRPC(filepath.Join(stateBase, "relay-jobs-worker", "worker.sock"))
+			defer rpc.Close()
+			deadline := time.Now().Add(5 * time.Second)
+			for {
+				var health job.Health
+				if err := rpc.Call(ctx, "GET", "/health", nil, &health); err == nil {
+					if health.Slots != 3 {
+						t.Fatalf("default configuration was not loaded: %+v", health)
+					}
+					break
+				}
+				if time.Now().After(deadline) {
+					t.Fatal("worker did not start on its default socket")
+				}
+				time.Sleep(10 * time.Millisecond)
+			}
+		})
+	}
 }
 
 func TestTOMLWorkerAndFlagPrecedence(t *testing.T) {
@@ -130,7 +186,7 @@ func TestTOMLErrorsAndRoleDefaults(t *testing.T) {
 		if o.paths.Socket != want {
 			t.Fatal(o.paths.Socket, want)
 		}
-		if role == "worker" && !strings.HasSuffix(o.paths.State, "relay-job-worker") {
+		if role == "worker" && !strings.HasSuffix(o.paths.State, "relay-jobs-worker") {
 			t.Fatal(o.paths.State)
 		}
 	}
@@ -145,7 +201,7 @@ func TestInstalledServiceReloadsTOML(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("XDG_DATA_HOME", filepath.Join(filepath.Dir(path), "data"))
-	name := "relay-job-config-" + job.NewID() + ".service"
+	name := "relay-jobs-config-" + job.NewID() + ".service"
 	configHome := os.Getenv("XDG_CONFIG_HOME")
 	if configHome == "" {
 		home, err := os.UserHomeDir()

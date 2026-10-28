@@ -70,7 +70,7 @@ func TestStorageFailuresRemainVisible(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", "")
 	t.Setenv("XDG_STATE_HOME", "")
 	t.Setenv("XDG_CACHE_HOME", "")
-	if !strings.Contains(DefaultPaths().State, ".local/state/relay-job") {
+	if !strings.Contains(DefaultPaths().State, ".local/state/relay-jobs") {
 		t.Fatal("default path resolution")
 	}
 }

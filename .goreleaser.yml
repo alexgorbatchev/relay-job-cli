@@ -1,10 +1,10 @@
 version: 2
-project_name: relay-job
+project_name: relay-jobs
 
 builds:
-  - id: relay-job
-    main: ./cmd/relay-job
-    binary: relay-job
+  - id: relay-jobs
+    main: ./cmd/relay-jobs
+    binary: relay-jobs
     flags: [-trimpath]
     env:
       - CGO_ENABLED=0

@@ -8,7 +8,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/alexgorbatchev/relay-job-cli/internal/agent"
+	"github.com/alexgorbatchev/relay-jobs-cli/internal/agent"
 	"github.com/spf13/cobra"
 )
 

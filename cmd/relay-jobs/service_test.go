@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/alexgorbatchev/relay-job-cli/internal/job"
+	"github.com/alexgorbatchev/relay-jobs-cli/internal/job"
 )
 
 func TestServeCommands(t *testing.T) {
@@ -18,7 +18,7 @@ func TestServeCommands(t *testing.T) {
 	}
 	w := &job.Worker{Store: job.Store{Dir: t.TempDir()}, Cache: t.TempDir(), Binary: integrationBinary, Slots: 1}
 	workerSocket := socketServer(t, w.Handler())
-	config := filepath.Join(t.TempDir(), "config.toml")
+	config := filepath.Join(t.TempDir(), "relay-jobs.toml")
 	if err := writeTOML(config, job.Config{Workers: []job.WorkerConfig{{Name: "test", Socket: workerSocket}}}); err != nil {
 		t.Fatal(err)
 	}
@@ -81,7 +81,7 @@ func TestServiceInstall(t *testing.T) {
 	t.Setenv("XDG_DATA_HOME", filepath.Join(dir, "data $percent% space"))
 	tools := filepath.Join(dir, "tools $percent% \"quote\"")
 	os.MkdirAll(tools, 0700)
-	os.WriteFile(filepath.Join(tools, "relay-job-test-tool"), []byte("#!/bin/sh\nexit 0\n"), 0755)
+	os.WriteFile(filepath.Join(tools, "relay-jobs-test-tool"), []byte("#!/bin/sh\nexit 0\n"), 0755)
 	t.Setenv("PATH", tools+string(os.PathListSeparator)+os.Getenv("PATH"))
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -91,7 +91,7 @@ func TestServiceInstall(t *testing.T) {
 	if configHome == "" {
 		configHome = filepath.Join(home, ".config")
 	}
-	name := "relay-job-test-" + job.NewID() + ".service"
+	name := "relay-jobs-test-" + job.NewID() + ".service"
 	unitPath := filepath.Join(configHome, "systemd/user", name)
 	t.Cleanup(func() {
 		exec.Command("systemctl", "--user", "stop", name).Run()
@@ -117,7 +117,7 @@ func TestServiceInstall(t *testing.T) {
 	defer rpc.Close()
 	var h job.Health
 	for i := 0; i < 100; i++ {
-		err = rpc.Call(context.Background(), "GET", "/health?requires=relay-job-test-tool", nil, &h)
+		err = rpc.Call(context.Background(), "GET", "/health?requires=relay-jobs-test-tool", nil, &h)
 		if err == nil {
 			break
 		}

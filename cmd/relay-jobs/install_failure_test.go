@@ -17,19 +17,19 @@ func TestInstallerFilesystemFailures(t *testing.T) {
 			data, config := filepath.Join(dir, "data"), filepath.Join(dir, "config")
 			t.Setenv("XDG_DATA_HOME", data)
 			t.Setenv("XDG_CONFIG_HOME", config)
-			name := "relay-job-failure-test.service"
+			name := "relay-jobs-failure-test.service"
 			switch mode {
 			case "unsupported executable path":
 				t.Setenv("XDG_DATA_HOME", filepath.Join(dir, "quotes\""))
 			case "data parent file":
 				os.WriteFile(data, nil, 0600)
 			case "data read only":
-				bin := filepath.Join(data, "relay-job/bin")
+				bin := filepath.Join(data, "relay-jobs/bin")
 				os.MkdirAll(bin, 0700)
 				os.Chmod(bin, 0500)
 				defer os.Chmod(bin, 0700)
 			case "target directory":
-				os.MkdirAll(filepath.Join(data, "relay-job/bin/relay-job"), 0700)
+				os.MkdirAll(filepath.Join(data, "relay-jobs/bin/relay-jobs"), 0700)
 			case "config parent file":
 				os.WriteFile(config, nil, 0600)
 			case "unit directory":

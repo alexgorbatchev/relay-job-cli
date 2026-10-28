@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-func Unit(id string) string { return "relay-job-task-" + id + ".service" }
+func Unit(id string) string { return "relay-jobs-task-" + id + ".service" }
 
 func runCommand(ctx context.Context, s Store, r Record) (int, error) {
 	return runDirectCommand(ctx, s, r)

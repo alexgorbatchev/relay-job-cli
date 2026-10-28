@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/alexgorbatchev/relay-job-cli/internal/launchd"
+	"github.com/alexgorbatchev/relay-jobs-cli/internal/launchd"
 )
 
 func darwinWorker(t *testing.T) *Worker {
