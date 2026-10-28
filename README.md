@@ -5,6 +5,7 @@
 - **Reuse remote workspaces:** Synchronize dirty and untracked source, deletions, and file modes while preserving configured dependency directories.
 - **Schedule across workers:** Select by worker name, operating-system label, required tools, warmth, and free slots.
 - **Recover execution:** Reconnect after a lost reply or daemon restart using the same worker and job ID.
+- **Inspect jobs:** List durable receipts and read elapsed duration, state, worker, and exit status.
 - **Configure with TOML:** Define workers and service settings in user configuration, and reusable commands in project configuration.
 - **Retain safely:** Expire old collected logs and unused workspaces while keeping active work and duplicate-execution protection.
 
@@ -42,7 +43,7 @@ flowchart TB
 - Each canonical source directory gets its own workspace. [Rsync](https://www.samba.org/ftp/rsync/rsync.1) checksums both copies and transfers changed data. Checksumming still reads unchanged files. `.git/` is excluded automatically; specify dependency/cache exclusions explicitly.
 - Linux uses native systemd user execution units; macOS uses launchd jobs. Agent or coordinator restarts preserve independent execution. An ambiguous start reply is reconciled on its assigned worker, without replaying elsewhere.
 - Busy eligible workers queue jobs. With all eligible workers offline, the default is an explicit failure. `--unavailable local` opts into running the original checkout before remote submission. Configuration errors, source-sync failures, and command failures never trigger fallback.
-- Command stdout/stderr stay separate original byte streams, with no cross-stream ordering guarantee. The generated job ID and CLI diagnostics go to stderr. `--quiet` omits the ID prefix. `AGENT=1` selects compact help and diagnostics, while command bytes remain unchanged.
+- Command stdout/stderr stay separate original byte streams, with no cross-stream ordering guarantee. The generated job ID and CLI diagnostics go to stderr. `--quiet` omits the ID prefix. Human receipts and worker listings use labeled text; `AGENT=1` selects compact JSON receipts/listings and compact help and diagnostics. Command bytes remain unchanged. Displayed home paths use `~`; stored and subprocess paths stay absolute.
 - Exit status matches the command. Cancellation returns 130; infrastructure failure or lost execution returns 125; CLI/API errors return 1. A missing execution unit without a completion receipt is reported as lost and is not replayed.
 - State and mirrored logs live under `$XDG_STATE_HOME/relay-jobs` and workspaces under `$XDG_CACHE_HOME/relay-jobs`. Without overrides, worker agents use separate `relay-jobs-worker` directories. Bases default to `~/.local/state` and `~/.cache`.
 - Maintenance runs at startup and hourly: completed logs expire after seven days; tracked idle workspaces after thirty days. Worker logs require durable collection acknowledgment. Receipts, execution markers, and lock files stay indefinitely. Expired log requests fail explicitly with HTTP 410. Workspace deletion includes excluded dependencies inside it; bootstrap them again on the next job.
@@ -100,6 +101,7 @@ Start the coordinator in one terminal with `relay-jobs coordinator serve`, or in
 ```sh
 relay-jobs worker list
 relay-jobs job exec --workers linux -- printf 'remote hello\n'
+relay-jobs job list
 ```
 
 Sample Output:
@@ -132,23 +134,32 @@ Global flags:
 | Flag | Short | Default | Description |
 | :--- | :--- | :--- | :--- |
 | `--config <path>` | — | `~/.config/relay-jobs/relay-jobs.toml` | Strict TOML user config; honors XDG_CONFIG_HOME |
-| `--state <path>` | — | `~/.local/state/relay-jobs` | Durable state; worker default is `relay-jobs-worker` |
-| `--cache <path>` | — | `~/.cache/relay-jobs` | Workspace cache; worker default is `relay-jobs-worker` |
 | `--socket <path>` | — | `<effective-state>/coordinator.sock` | Worker default is `<effective-state>/worker.sock` |
-| `--worker-timeout <duration>` | — | `1s` | Positive availability budget per worker, including SSH setup and health response |
 | `--help` | `-h` | `false` | Command help |
 | `--version` | `-v` | `false` | Raw version and newline |
 
 CLI flags override TOML. Missing default configuration is optional for commands that do not need a worker list; an explicitly selected missing file fails. Unknown TOML keys fail. Relative TOML paths resolve from the configuration file and expand a leading `~`; CLI paths resolve from the caller's directory.
 
-Set `[coordinator] worker_timeout = "1s"` in user TOML to configure the availability budget for scheduling and listing. `--worker-timeout` overrides it; explicit service installation flags persist across restarts. This budget covers waiting for a connection, SSH setup and the health response, rather than command execution. `worker list` probes concurrently, preserves configuration order and reports unavailable workers in each entry's `error` field. An offline worker does not fail the listing; coordinator/API failures still exit nonzero. The CLI allows two additional seconds for the coordinator response. A listing override applies to that request; scheduling uses the running coordinator's settings.
+`relay-jobs worker serve`, `relay-jobs coordinator serve`, and `relay-jobs service install`:
+
+| Flag | Short | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `--state <path>` | — | `~/.local/state/relay-jobs` | Durable state; worker default is `relay-jobs-worker` |
+| `--cache <path>` | — | `~/.cache/relay-jobs` | Workspace cache; worker default is `relay-jobs-worker` |
+
+`relay-jobs worker list`, `relay-jobs coordinator serve`, and `relay-jobs service install --role coordinator`:
+
+| Flag | Short | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `--worker-timeout <duration>` | — | `1s` | Positive availability budget per worker, including SSH setup and health response |
+
+Set `[coordinator] worker_timeout = "1s"` in user TOML to configure the availability budget for scheduling and listing. `--worker-timeout` overrides it; explicit coordinator service installation flags persist across restarts. This budget covers waiting for a connection, SSH setup and the health response, rather than command execution. `worker list` probes concurrently, preserves configuration order and reports unavailable workers as labeled errors in human mode or each entry's `error` field in agent mode. An offline worker does not fail the listing; coordinator/API failures still exit nonzero. The CLI allows two additional seconds for the coordinator response. A listing override applies to that request; scheduling uses the running coordinator's settings.
 
 `relay-jobs job exec -- <command...>` and `relay-jobs job run <name>`:
 
 | Flag | Short | Default | Description |
 | :--- | :--- | :--- | :--- |
 | `--source <path>` | — | `.` | Source directory, including dirty and untracked files |
-| `--project <file>` | — | `relay-jobs.toml` | Named-job TOML relative to source |
 | `--id <id>` | — | empty | Reuse a generated ID with the identical request |
 | `--unavailable <policy>` | — | `fail` | `fail` or explicit `local` before submission |
 | `--detach` | — | `false` | Submit without following output |
@@ -158,6 +169,12 @@ Set `[coordinator] worker_timeout = "1s"` in user TOML to configure the availabi
 | `--requires <tools>` | — | `[]` | Required worker executables |
 | `--labels <labels>` | — | `[]` | Required worker labels |
 | `--env <KEY=VALUE>` | — | `[]` | Repeat for explicit command environment |
+
+`relay-jobs job run <name>` only:
+
+| Flag | Short | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `--project <file>` | — | `relay-jobs.toml` | Named-job TOML relative to source |
 
 `relay-jobs job logs <id>`:
 
@@ -184,11 +201,11 @@ Set `[coordinator] worker_timeout = "1s"` in user TOML to configure the availabi
 | Flag | Short | Default | Description |
 | :--- | :--- | :--- | :--- |
 | `--role <role>` | — | empty | Required: `worker` or `coordinator` |
-| `--slots <count>` | — | `1` | Positive worker concurrency limit |
+| `--slots <count>` | — | `1` | Positive worker concurrency limit; worker role only |
 | `--name <unit.service>` | — | empty | Runtime default `relay-jobs-<role>.service` |
 | `--binary <path>` | — | empty | Runtime default: the running executable |
 
-The installer copies the binary to `$XDG_DATA_HOME/relay-jobs/bin/relay-jobs` and captures PATH. On restart, services reread TOML; explicit installation flags remain overrides. User units go under `$XDG_CONFIG_HOME/systemd/user`. Bases default to `~/.local/share` and `~/.config`.
+The installer atomically replaces the binary in `$XDG_DATA_HOME/relay-jobs/bin/relay-jobs` and the unit file, syncing file contents and directory entries before starting the service, and captures PATH. On restart, services reread TOML; explicit installation flags remain overrides. User units go under `$XDG_CONFIG_HOME/systemd/user`. Bases default to `~/.local/share` and `~/.config`.
 
 # TOML Configuration
 
@@ -207,7 +224,13 @@ Retention uses Go duration strings such as `24h` or `30m`, not `7d`. Periods mus
 
 # Recovery
 
+Run `relay-jobs job list` to list all coordinator receipts, newest submission first (ties sort by ID). Listing reads durable state without contacting workers. An empty list prints `No jobs.` in human mode or `[]` in agent mode. Receipt read errors fail the command.
+
 Keep the printed job ID. Query `relay-jobs job status <id>`, replay `relay-jobs job logs <id>`, or reconnect with `relay-jobs job logs <id> --follow`. Cancel with `relay-jobs job cancel <id>`. SIGINT/SIGTERM/SIGHUP while following requests cancellation. An unreachable worker leaves cancellation pending until recovery; do not submit another copy merely because a reply was lost.
+
+Receipts include ID, state, worker, duration, exit code, optional error, and log-expiry status. Duration includes queueing, synchronization, and execution from submission until the terminal receipt update, or until the query for active jobs. It is a Go duration string rounded to milliseconds, such as `1.25s`. Human output uses labeled fields; agent output uses a JSON object for one receipt or an array for `job list`.
+
+Invalid commands and output-write failures exit nonzero. Human help follows the terminal width or `COLUMNS`, falling back to 80 columns for redirected output; agent help stays untruncated.
 
 The [agent usage skill](skills/relay-jobs/SKILL.md) covers the full command interface. `relay-jobs skill` prints its installation command and URL offline.
 

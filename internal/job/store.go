@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"syscall"
 	"time"
+
+	"github.com/alexgorbatchev/relay-jobs-cli/internal/durable"
 )
 
 type Store struct{ Dir string }
@@ -32,38 +34,11 @@ func (s Store) Put(r Record) error {
 	return WriteJSON(s.Path(r.ID, "record.json"), r)
 }
 func WriteJSON(path string, v any) error {
-	if err := ensureDir(filepath.Dir(path)); err != nil {
-		return err
-	}
 	b, err := json.Marshal(v)
 	if err != nil {
 		return err
 	}
-	f, err := os.CreateTemp(filepath.Dir(path), ".write-")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(f.Name()) // temporary name disappears after successful rename.
-	if _, err = f.Write(b); err != nil {
-		f.Close()
-		return err
-	}
-	if err = f.Sync(); err != nil {
-		f.Close()
-		return err
-	}
-	if err = f.Close(); err != nil {
-		return err
-	}
-	if err = os.Rename(f.Name(), path); err != nil {
-		return err
-	}
-	d, err := os.Open(filepath.Dir(path))
-	if err != nil {
-		return err
-	}
-	defer d.Close()
-	return d.Sync()
+	return durable.WriteFile(path, b, 0600)
 }
 func (s Store) List() ([]Record, error) {
 	entries, err := os.ReadDir(filepath.Join(s.Dir, "jobs"))
@@ -96,7 +71,7 @@ func Lock(path string) (*os.File, error) {
 }
 func recordLock(path string) (*os.File, error) { return fileLock(path, syscall.LOCK_EX) }
 func fileLock(path string, how int) (*os.File, error) {
-	if err := ensureDir(filepath.Dir(path)); err != nil {
+	if err := durable.EnsureDir(filepath.Dir(path)); err != nil {
 		return nil, err
 	}
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0600)
@@ -108,40 +83,4 @@ func fileLock(path string, how int) (*os.File, error) {
 		return nil, err
 	}
 	return f, nil
-}
-
-func ensureDir(path string) error {
-	var missing []string
-	for p := path; ; p = filepath.Dir(p) {
-		_, err := os.Stat(p)
-		if err == nil {
-			break
-		}
-		if !os.IsNotExist(err) {
-			return err
-		}
-		missing = append(missing, p)
-		if filepath.Dir(p) == p {
-			break
-		}
-	}
-	if err := os.MkdirAll(path, 0700); err != nil {
-		return err
-	}
-	// Persist new directory entries before a receipt can authorize execution.
-	for i := len(missing) - 1; i >= 0; i-- {
-		d, err := os.Open(filepath.Dir(missing[i]))
-		if err != nil {
-			return err
-		}
-		err = d.Sync()
-		closeErr := d.Close()
-		if err != nil {
-			return err
-		}
-		if closeErr != nil {
-			return closeErr
-		}
-	}
-	return nil
 }

@@ -4,11 +4,11 @@ description: Use when submitting remote commands, configuring workers, inspectin
 author: alexgorbatchev
 metadata:
   created_on: 2026-10-22 22:15
-  last_modified: 2026-10-28 12:00
+  last_modified: 2026-10-28 14:11
   status: current
 ---
 
-Run batch commands in persistent Linux or macOS worker workspaces. Set `AGENT=1` for compact help and errors. Job stdout/stderr remain original bytes in both modes.
+Run batch commands in persistent Linux or macOS worker workspaces. Set `AGENT=1` for compact help, errors, and JSON receipts/listings. Human output uses labeled text. Human help follows terminal width or positive `COLUMNS`, with an 80-column fallback; agent help is untruncated. Output write failures and invalid commands exit nonzero. Displayed home paths use `~`; stored and subprocess paths stay absolute. Job stdout/stderr remain original bytes in both modes.
 
 ## `relay-jobs`
 
@@ -16,11 +16,8 @@ Invoke without arguments for help. Global flags apply to every command:
 
 | Flag | Type | Default | Purpose |
 | --- | --- | --- | --- |
-| `--config` | string | `$XDG_CONFIG_HOME/relay-jobs/relay-jobs.toml` | Worker list; config base falls back to `~/.config`. |
-| `--state` | string | `$XDG_STATE_HOME/relay-jobs` | Durable records; base falls back to `~/.local/state`. |
-| `--cache` | string | `$XDG_CACHE_HOME/relay-jobs` | Worker workspaces; base falls back to `~/.cache`. |
+| `--config` | string | `$XDG_CONFIG_HOME/relay-jobs/relay-jobs.toml` | User configuration; config base falls back to `~/.config`. |
 | `--socket` | string | `<default-state>/coordinator.sock` | Runtime default follows effective state; workers use worker.sock. |
-| `--worker-timeout` | duration | 1s | Positive worker availability budget, including SSH setup and health response. |
 | `--help` | bool | false | Print command help; `-h`. |
 | `--version` | bool | false | Print raw version and newline; `-v`. |
 
@@ -48,6 +45,19 @@ Use SSH aliases with preconfigured keys and trusted host keys. An omitted `host`
 
 For mixed operating systems, specify `--workers` or `--labels` on platform-dependent jobs. Without either filter, any configured worker is eligible. Exclude host-built dependencies and caches before synchronizing to another OS.
 
+The following local flags apply to `coordinator serve`, `worker serve`, and `service install`, not client commands:
+
+| Flag | Type | Default | Purpose |
+| --- | --- | --- | --- |
+| `--state` | string | `$XDG_STATE_HOME/relay-jobs` | Durable records; base falls back to `~/.local/state`. Workers default to relay-jobs-worker. |
+| `--cache` | string | `$XDG_CACHE_HOME/relay-jobs` | Workspaces; base falls back to `~/.cache`. Workers default to relay-jobs-worker. |
+
+`coordinator serve` also accepts:
+
+| Flag | Type | Default | Purpose |
+| --- | --- | --- | --- |
+| `--worker-timeout` | duration | 1s | Positive coordinator availability budget, including SSH setup and health response. |
+
 Configure automatic cleanup on `coordinator serve`, `worker serve`, or `service install`:
 
 | Flag | Type | Default | Purpose |
@@ -70,6 +80,8 @@ On macOS, commands and execution supervisors have separate native launchd jobs. 
 
 | Flag | Type | Default | Purpose |
 | --- | --- | --- | --- |
+| `--state` | string | `$XDG_STATE_HOME/relay-jobs` | Durable records; base falls back to `~/.local/state`. Workers default to relay-jobs-worker. |
+| `--cache` | string | `$XDG_CACHE_HOME/relay-jobs` | Workspaces; base falls back to `~/.cache`. Workers default to relay-jobs-worker. |
 | `--slots` | int | 1 | Positive simultaneous reservation/execution limit. |
 | `--log-retention` | duration | 168h0m0s | Expire completed logs after seven days; 0 disables expiry. |
 | `--workspace-retention` | duration | 720h0m0s | Delete tracked workspaces after thirty idle days; 0 disables expiry. |
@@ -77,7 +89,11 @@ On macOS, commands and execution supervisors have separate native launchd jobs. 
 
 ## `relay-jobs worker list`
 
-Ask the coordinator for each configured worker's health, occupancy, protocol, and connection error. Print JSON in configuration order; inspect each entry's error field. Probes run concurrently; unavailable workers are per-entry errors and do not fail the command. Coordinator/API failures exit nonzero. `--worker-timeout` overrides TOML for this request; the client allows two additional seconds to receive the response. Scheduling uses the running coordinator's settings. Checking health creates reusable SSH tunnels.
+Ask the coordinator for each configured worker's health, occupancy, protocol, and connection error. Print labeled worker entries in configuration order, or JSON with `AGENT=1`; inspect each entry's error. Probes run concurrently; unavailable workers are per-entry errors and do not fail the command. Coordinator/API failures exit nonzero. `--worker-timeout` overrides TOML for this request; the client allows two additional seconds to receive the response. Scheduling uses the running coordinator's settings. Checking health creates reusable SSH tunnels.
+
+| Flag | Type | Default | Purpose |
+| --- | --- | --- | --- |
+| `--worker-timeout` | duration | 1s | Positive coordinator availability budget, including SSH setup and health response. |
 
 ## `relay-jobs job`
 
@@ -90,10 +106,9 @@ Submit literal executable arguments after `--`. Generate an ID before submission
 | Flag | Type | Default | Purpose |
 | --- | --- | --- | --- |
 | `--source` | string | . | Source directory, including dirty and untracked files. |
-| `--project` | string | relay-jobs.toml | Named-job file relative to source; used by `job run`. |
 | `--id` | string | empty | Reconcile/reuse a generated 32-character lowercase hex ID with the same request. |
 | `--unavailable` | string | fail | `fail` or explicit `local` fallback before execution submission. |
-| `--detach` | bool | false | Submit and print a JSON receipt without following. |
+| `--detach` | bool | false | Submit and print a receipt without following; JSON in agent mode. |
 | `--quiet` | bool | false | Omit the job ID prefix from stderr; use `--id` when retaining an ID is necessary. |
 | `--workers` | stringSlice | [] | Comma-separated eligible worker names. |
 | `--exclude` | stringSlice | [] | Rsync patterns excluded from source and protected from deletion remotely. |
@@ -118,11 +133,19 @@ exclude = ["node_modules/", ".venv/", "bin/", ".tmp/"]
 requires = ["just"]
 ```
 
+| Flag | Type | Default | Purpose |
+| --- | --- | --- | --- |
+| `--project` | string | relay-jobs.toml | Named-job file relative to source; only accepted by job run. |
+
 Additional job fields: `env` is a string map; `cwd` is a relative directory inside the synchronized workspace; `labels` and `requires` constrain scheduling. Local fallback uses the original source directory and requires its own toolchain/dependencies. Sync failures and configuration errors fail explicitly.
+
+## `relay-jobs job list`
+
+List the coordinator's durable receipts, newest submission first, with ID ascending for equal timestamps. This reads local coordinator records without probing workers. Empty output is `No jobs.` for humans or `[]` in agent mode. API and corrupt-record errors exit nonzero. Entries use the same fields as job status.
 
 ## `relay-jobs job status <id>`
 
-Print the coordinator's durable JSON receipt with ID, state, worker, exit code, error, and `logs_expired: true` after cleanup. A worker outage after submission keeps the job pending reconciliation, with an explanatory error; it is not safe to start another copy. `lost` means the execution unit disappeared without a completion receipt. Repair the worker connection and recheck before manually deciding to submit a new ID.
+Print the coordinator's durable receipt as labeled text, or JSON in agent mode, with `id`, `state`, `worker`, `duration`, `exit_code`, optional `error`, and `logs_expired: true` after cleanup. Duration includes queueing, synchronization, and execution from coordinator submission until the terminal receipt update, or until the query for active jobs. It is a Go duration string rounded to milliseconds. Job list returns an array of these objects. A worker outage after submission keeps the job pending reconciliation, with an explanatory error; it is not safe to start another copy. `lost` means the execution unit disappeared without a completion receipt. Repair the worker connection and recheck before manually deciding to submit a new ID.
 
 ## `relay-jobs job logs <id>`
 
@@ -142,12 +165,15 @@ Manage reproducible user-service installation.
 
 ## `relay-jobs service install`
 
-On Linux, copy the running binary into `$XDG_DATA_HOME/relay-jobs/bin/relay-jobs` (base defaults to `~/.local/share`), write `$XDG_CONFIG_HOME/systemd/user/relay-jobs-<role>.service`, reload the user manager, enable/start, and verify active status. The unit captures PATH and explicit CLI overrides. Services reread TOML on restart. Restart an already active service with `systemctl --user restart relay-jobs-<role>` after reinstalling the binary. Inspect `loginctl show-user "$USER" -p Linger` if services must survive logout; enabling lingering is a separate host configuration action. This command rejects macOS before changing files; use the repository's `examples/launchd-worker.plist` as a LaunchAgent template with the correct absolute executable and tool PATH. That example starts at GUI login, not system boot.
+On Linux, copy the running binary into `$XDG_DATA_HOME/relay-jobs/bin/relay-jobs` (base defaults to `~/.local/share`), write `$XDG_CONFIG_HOME/systemd/user/relay-jobs-<role>.service`, reload the user manager, enable/start, and verify active status. Binary and unit replacements are atomic and synced durably. The unit captures PATH and explicit CLI overrides. Services reread TOML on restart. Restart an already active service with `systemctl --user restart relay-jobs-<role>` after reinstalling the binary. Inspect `loginctl show-user "$USER" -p Linger` if services must survive logout; enabling lingering is a separate host configuration action. This command rejects macOS before changing files; use the repository's `examples/launchd-worker.plist` as a LaunchAgent template with the correct absolute executable and tool PATH. That example starts at GUI login, not system boot.
 
 | Flag | Type | Default | Purpose |
 | --- | --- | --- | --- |
+| `--state` | string | `$XDG_STATE_HOME/relay-jobs` | Durable records; base falls back to `~/.local/state`. Workers default to relay-jobs-worker. |
+| `--cache` | string | `$XDG_CACHE_HOME/relay-jobs` | Workspaces; base falls back to `~/.cache`. Workers default to relay-jobs-worker. |
+| `--worker-timeout` | duration | 1s | Coordinator role only; positive availability budget, including SSH setup and health response. |
 | `--role` | string | empty | Required: coordinator or worker. |
-| `--slots` | int | 1 | Positive worker concurrency limit. |
+| `--slots` | int | 1 | Positive worker concurrency limit; worker role only. |
 | `--name` | string | empty | Custom service unit name ending in `.service`; defaults to `relay-jobs-<role>.service`. |
 | `--binary` | string | empty | Binary to install; defaults to the running executable. |
 | `--log-retention` | duration | 168h0m0s | Persist completed-log lifetime in the installed service; 0 disables expiry. |

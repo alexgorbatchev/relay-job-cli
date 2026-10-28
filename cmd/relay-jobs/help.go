@@ -2,9 +2,11 @@ package main
 
 import (
 	"fmt"
+	"strings"
 
 	cobrahelptree "github.com/alexgorbatchev/cobra-help-tree/v2"
 	"github.com/alexgorbatchev/relay-jobs-cli/internal/agent"
+	"github.com/mattn/go-runewidth"
 	"github.com/spf13/cobra"
 )
 
@@ -25,7 +27,6 @@ func setupHelp(cmd *cobra.Command) {
 		Catalog: techCatalog,
 		Tree:    cobrahelptree.TreeOptions{HideGeneratedCommands: true},
 	})
-	help := cmd.HelpFunc()
 	cmd.SetHelpFunc(func(c *cobra.Command, args []string) {
 		if agent.IsAgentMode() {
 			if _, err := fmt.Fprintln(c.OutOrStdout(), "ALERT: Agents must read `AGENT=1 relay-jobs skill` before using this tool."); err != nil {
@@ -33,6 +34,44 @@ func setupHelp(cmd *cobra.Command) {
 				return
 			}
 		}
-		help(c, args)
+		var screen string
+		if agent.IsAgentMode() {
+			screen = cobrahelptree.RenderAgentHelp(c, techCatalog, cobrahelptree.AgentOptions{})
+		} else {
+			options := humanHelpOptions()
+			screen = boundedHelp(cobrahelptree.RenderTreeHelp(c, techCatalog, options), options.TerminalWidth)
+		}
+		if _, err := fmt.Fprint(c.OutOrStdout(), screen); err != nil {
+			c.PrintErrln(err)
+		}
 	})
+	cmd.SetUsageFunc(func(c *cobra.Command) error {
+		options := humanHelpOptions()
+		screen := boundedHelp(cobrahelptree.RenderTreeUsage(c, techCatalog, options), options.TerminalWidth)
+		if agent.IsAgentMode() {
+			screen = "ALERT: Agents must read `AGENT=1 relay-jobs skill` before using this tool.\n" + cobrahelptree.RenderAgentHelp(c, techCatalog, cobrahelptree.AgentOptions{})
+		}
+		_, err := fmt.Fprint(c.ErrOrStderr(), screen)
+		return err
+	})
+}
+
+func boundedHelp(screen string, width int) string {
+	lines := strings.Split(screen, "\n")
+	for i, line := range lines {
+		lines[i] = runewidth.Truncate(line, width, strings.Repeat(".", min(width, 3)))
+	}
+	return strings.Join(lines, "\n")
+}
+
+func humanHelpOptions() cobrahelptree.TreeOptions {
+	width := cobrahelptree.GetTerminalWidth()
+	if width == 0 {
+		width = 80
+	}
+	return cobrahelptree.TreeOptions{HideGeneratedCommands: true, TerminalWidth: width}
+}
+
+func commandGroup(use, short string) *cobra.Command {
+	return &cobra.Command{Use: use, Short: short, Args: cobra.NoArgs, RunE: func(c *cobra.Command, _ []string) error { return c.Help() }}
 }

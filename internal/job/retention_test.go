@@ -164,6 +164,8 @@ func TestRetentionCollectionAndRecovery(t *testing.T) {
 	c := NewCoordinator(paths, config, testBinary)
 	defer c.Close()
 	r.Worker, r.State, r.Submitted = "worker", stateRunning, true
+	r.Created = r.Created.Add(-time.Hour)
+	submitted := r.Created
 	if err := c.Store.Put(r); err != nil {
 		t.Fatal(err)
 	}
@@ -184,6 +186,10 @@ func TestRetentionCollectionAndRecovery(t *testing.T) {
 	}
 	if done, err := c.observe(context.Background(), &r); !done || err != nil {
 		t.Fatal(done, err)
+	}
+	persisted, err := c.Store.Get(r.ID)
+	if err != nil || !persisted.Created.Equal(submitted) {
+		t.Fatal("worker receipt replaced coordinator submission time", persisted.Created, submitted, err)
 	}
 	got, err = w.Store.Get(r.ID)
 	if err != nil || !got.LogsCollected {

@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/alexgorbatchev/relay-jobs-cli/internal/display"
 	"github.com/alexgorbatchev/relay-jobs-cli/internal/job"
 	"github.com/pelletier/go-toml/v2"
 	"github.com/spf13/cobra"
@@ -118,8 +119,9 @@ func TestSkillCoversInterface(t *testing.T) {
 		}
 		section, _, _ = strings.Cut(section, "\n## ")
 		if c.CommandPath() == "relay-jobs job run" {
-			_, section, _ = strings.Cut(text, "## `relay-jobs job exec -- <command...>`\n")
-			section, _, _ = strings.Cut(section, "\n## ")
+			_, shared, _ := strings.Cut(text, "## `relay-jobs job exec -- <command...>`\n")
+			shared, _, _ = strings.Cut(shared, "\n## ")
+			section += shared
 		}
 		check := func(f *pflag.Flag) {
 			if f.Hidden || (f.Name == "help" && c.Parent() != nil) {
@@ -183,7 +185,7 @@ func TestOutputAndPathBoundaries(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	for _, tc := range []struct{ in, want string }{{home, "~"}, {home + "/a", "~/a"}, {home + "-other/a", home + "-other/a"}, {"error: '" + home + "/a'", "error: '~/a'"}} {
-		if got := displayPath(tc.in); got != tc.want {
+		if got := display.Path(tc.in); got != tc.want {
 			t.Errorf("%q => %q", tc.in, got)
 		}
 	}
@@ -203,12 +205,12 @@ func TestOutputAndPathBoundaries(t *testing.T) {
 		}
 	}
 	for _, tc := range []struct{ in, want string }{{"/srv" + home + "/a", "/srv" + home + "/a"}, {home + " and " + home + "/a", "~ and ~/a"}, {"/outside/a", "/outside/a"}} {
-		if got := displayPath(tc.in); got != tc.want {
+		if got := display.Path(tc.in); got != tc.want {
 			t.Errorf("%q => %q", tc.in, got)
 		}
 	}
 	t.Setenv("HOME", "")
-	if displayPath("/tmp/other-user") != "/tmp/other-user" {
+	if display.Path("/tmp/other-user") != "/tmp/other-user" {
 		t.Fatal("missing home changed unrelated path")
 	}
 }

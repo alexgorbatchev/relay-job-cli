@@ -11,6 +11,7 @@ import (
 )
 
 func TestWorkerListAvailability(t *testing.T) {
+	t.Setenv("AGENT", "1")
 	workerSocket := socketServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		select {
 		case <-time.After(2200 * time.Millisecond):

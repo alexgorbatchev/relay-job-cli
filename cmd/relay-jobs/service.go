@@ -9,35 +9,11 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/alexgorbatchev/relay-jobs-cli/internal/durable"
 	"github.com/alexgorbatchev/relay-jobs-cli/internal/job"
 	"github.com/spf13/cobra"
 )
 
-func displayPath(s string) string {
-	home, err := os.UserHomeDir()
-	if err != nil || home == "" {
-		return s
-	}
-	var out strings.Builder
-	for offset := 0; ; {
-		i := strings.Index(s[offset:], home)
-		if i < 0 {
-			out.WriteString(s[offset:])
-			return out.String()
-		}
-		i += offset
-		end := i + len(home)
-		out.WriteString(s[offset:i])
-		before := i == 0 || strings.ContainsRune(" \t\r\n\"'=:([", rune(s[i-1]))
-		after := end == len(s) || s[end] == '/' || strings.ContainsRune(" \t\r\n\"':)]", rune(s[end]))
-		if before && after {
-			out.WriteByte('~')
-		} else {
-			out.WriteString(home)
-		}
-		offset = end
-	}
-}
 func unitQuote(s string) string {
 	return `"` + strings.NewReplacer(`\`, `\\`, `"`, `\"`, `%`, `%%`, "\n", `\n`, "\r", `\r`, "\t", `\t`).Replace(s) + `"`
 }
@@ -46,7 +22,7 @@ func (o *options) serviceCommand() *cobra.Command {
 	var slots int
 	var name, binary string
 	var retention *job.Retention
-	group := &cobra.Command{Use: "service", Short: "Install Linux background services", Args: cobra.NoArgs}
+	group := commandGroup("service", "Install Linux background services")
 	install := &cobra.Command{Use: "install", Short: "Install and start a user service", Args: cobra.NoArgs, RunE: func(c *cobra.Command, _ []string) error {
 		if err := retention.Validate(); err != nil {
 			return err
@@ -56,6 +32,12 @@ func (o *options) serviceCommand() *cobra.Command {
 		}
 		if role != "coordinator" && role != "worker" {
 			return fmt.Errorf("role must be coordinator or worker")
+		}
+		if role == "worker" && c.Flags().Changed("worker-timeout") {
+			return fmt.Errorf("--worker-timeout applies only to the coordinator role")
+		}
+		if role == "coordinator" && o.explicit["slots"] {
+			return fmt.Errorf("--slots applies only to the worker role")
 		}
 		if slots < 1 {
 			return fmt.Errorf("slots must be positive")
@@ -93,30 +75,11 @@ func (o *options) serviceCommand() *cobra.Command {
 		if strings.ContainsAny(target, "'\"\\") || strings.IndexFunc(target, func(r rune) bool { return r < ' ' || r == 0x7f }) >= 0 {
 			return fmt.Errorf("systemd executable paths cannot contain quotes, backslashes, or control characters; choose another XDG_DATA_HOME")
 		}
-		if err = os.MkdirAll(binDir, 0700); err != nil {
-			return err
-		}
 		contents, err := os.ReadFile(binary)
 		if err != nil {
 			return err
 		}
-		f, err := os.CreateTemp(binDir, ".install-")
-		if err != nil {
-			return err
-		}
-		defer os.Remove(f.Name())
-		if _, err = f.Write(contents); err != nil {
-			f.Close()
-			return err
-		}
-		if err = f.Chmod(0755); err != nil {
-			f.Close()
-			return err
-		}
-		if err = f.Close(); err != nil {
-			return err
-		}
-		if err = os.Rename(f.Name(), target); err != nil {
+		if err = durable.WriteFile(target, contents, 0755); err != nil {
 			return err
 		}
 		binary = target
@@ -143,10 +106,7 @@ func (o *options) serviceCommand() *cobra.Command {
 		}
 		unit := "[Unit]\nDescription=Remote job " + role + "\n\n[Service]\nType=exec\nExecStart=:" + strings.Join(args, " ") + "\nEnvironment=" + unitQuote("PATH="+os.Getenv("PATH")) + "\nRestart=on-failure\nRestartSec=2\nTimeoutStopSec=15\nUMask=0077\n\n[Install]\nWantedBy=default.target\n"
 		dir := filepath.Join(configHome, "systemd/user")
-		if err = os.MkdirAll(dir, 0700); err != nil {
-			return err
-		}
-		if err = os.WriteFile(filepath.Join(dir, name), []byte(unit), 0600); err != nil {
+		if err = durable.WriteFile(filepath.Join(dir, name), []byte(unit), 0600); err != nil {
 			return err
 		}
 		for _, args := range [][]string{{"--user", "daemon-reload"}, {"--user", "enable", "--now", name}, {"--user", "is-active", "--quiet", name}} {
@@ -159,6 +119,8 @@ func (o *options) serviceCommand() *cobra.Command {
 		return err
 	}}
 	retention = retentionFlags(install)
+	o.daemonFlags(install)
+	o.timeoutFlag(install)
 	install.Flags().StringVar(&role, "role", "", "Service role: coordinator or worker")
 	install.Flags().IntVar(&slots, "slots", 1, "Maximum concurrent worker jobs")
 	install.Flags().StringVar(&name, "name", "", "Unit name, default relay-jobs-<role>.service")

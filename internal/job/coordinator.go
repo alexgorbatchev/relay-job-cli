@@ -353,6 +353,23 @@ func (c *Coordinator) cancelWorker(ctx context.Context, r Record) error {
 }
 func (c *Coordinator) Handler(ctx context.Context) http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /jobs", func(w http.ResponseWriter, r *http.Request) {
+		records, err := c.Store.List()
+		if err != nil {
+			apiFailure(w, err)
+			return
+		}
+		if records == nil {
+			records = []Record{}
+		}
+		slices.SortFunc(records, func(a, b Record) int {
+			if order := b.Created.Compare(a.Created); order != 0 {
+				return order
+			}
+			return strings.Compare(a.ID, b.ID)
+		})
+		respond(w, records)
+	})
 	mux.HandleFunc("POST /jobs", func(w http.ResponseWriter, r *http.Request) {
 		var req Request
 		if !decode(w, r, &req) {

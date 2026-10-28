@@ -87,6 +87,8 @@ func (c *Coordinator) observe(ctx context.Context, r *Record) (bool, error) {
 	}
 	rec.Worker = r.Worker
 	rec.Submitted = r.Submitted
+	// The coordinator owns submission time; the worker creates its receipt later.
+	rec.Created = r.Created
 	changed := rec.State != r.State || rec.ExitCode != r.ExitCode || rec.Error != r.Error
 	*r = rec
 	if changed {

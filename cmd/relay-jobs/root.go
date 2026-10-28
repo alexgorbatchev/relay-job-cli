@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/url"
 	"os"
@@ -10,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/alexgorbatchev/relay-jobs-cli/internal/display"
 	"github.com/alexgorbatchev/relay-jobs-cli/internal/job"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -28,23 +28,20 @@ type exitError int
 func (e exitError) Error() string { return fmt.Sprintf("job exited %d", int(e)) }
 
 func newRootCommand() *cobra.Command {
-	o := &options{paths: job.DefaultPaths()}
+	o := &options{paths: job.DefaultPaths(), workerTimeout: job.WorkerTimeout}
 	root := &cobra.Command{Use: "relay-jobs", Short: "Run commands in persistent remote workspaces", Version: version, SilenceUsage: true, SilenceErrors: true, Args: cobra.NoArgs, RunE: func(c *cobra.Command, _ []string) error { return c.Help() }}
 	root.SetVersionTemplate("{{.Version}}\n")
 	root.PersistentPreRunE = func(c *cobra.Command, _ []string) error {
-		if c.Name() == "skill" {
+		if c.Name() == "skill" || c.HasSubCommands() {
 			return nil
 		}
 		return o.configure(c)
 	}
-	root.PersistentFlags().StringVar(&o.paths.Config, "config", o.paths.Config, "Worker configuration file")
-	root.PersistentFlags().StringVar(&o.paths.State, "state", o.paths.State, "Service state directory")
-	root.PersistentFlags().StringVar(&o.paths.Cache, "cache", o.paths.Cache, "Worker workspace directory")
+	root.PersistentFlags().StringVar(&o.paths.Config, "config", o.paths.Config, "User configuration file")
 	root.PersistentFlags().StringVar(&o.paths.Socket, "socket", o.paths.Socket, "Coordinator or worker socket")
-	root.PersistentFlags().DurationVar(&o.workerTimeout, "worker-timeout", job.WorkerTimeout, "Positive worker availability timeout")
-	jobs := &cobra.Command{Use: "job", Short: "Run and inspect jobs", Args: cobra.NoArgs}
-	jobs.AddCommand(o.runCommand(false), o.runCommand(true), o.statusCommand(), o.logsCommand(), o.cancelCommand())
-	worker := &cobra.Command{Use: "worker", Short: "Manage workers", Args: cobra.NoArgs}
+	jobs := commandGroup("job", "Run and inspect jobs")
+	jobs.AddCommand(o.runCommand(false), o.runCommand(true), o.listCommand(), o.statusCommand(), o.logsCommand(), o.cancelCommand())
+	worker := commandGroup("worker", "Manage workers")
 	var slots int
 	var workerRetention *job.Retention
 	serveWorker := &cobra.Command{Use: "serve", Short: "Run the worker agent", Args: cobra.NoArgs, RunE: func(c *cobra.Command, _ []string) error {
@@ -59,21 +56,23 @@ func newRootCommand() *cobra.Command {
 		return job.ServeWorker(c.Context(), o.paths.Socket, w)
 	}}
 	workerRetention = retentionFlags(serveWorker)
+	o.daemonFlags(serveWorker)
 	serveWorker.Flags().IntVar(&slots, "slots", 1, "Maximum concurrent jobs")
-	worker.AddCommand(serveWorker, &cobra.Command{Use: "list", Short: "Check configured workers", Args: cobra.NoArgs, RunE: func(c *cobra.Command, _ []string) error {
+	listWorkers := &cobra.Command{Use: "list", Short: "Check configured workers", Args: cobra.NoArgs, RunE: func(c *cobra.Command, _ []string) error {
 		rpc := job.NewRPC(o.paths.Socket)
 		defer rpc.Close()
-		var out json.RawMessage
+		var out []workerReceipt
 		// Leave time for the coordinator to return per-worker timeout errors.
 		ctx, cancel := context.WithDeadline(c.Context(), time.Now().Add(o.workerTimeout).Add(job.ConnectTimeout))
 		defer cancel()
 		if err := rpc.WithTimeout(0).Call(ctx, "GET", "/workers?timeout="+url.QueryEscape(o.workerTimeout.String()), nil, &out); err != nil {
 			return err
 		}
-		_, err := fmt.Fprintln(c.OutOrStdout(), string(out))
-		return err
-	}})
-	coordinator := &cobra.Command{Use: "coordinator", Short: "Manage the local coordinator", Args: cobra.NoArgs}
+		return printWorkers(c, out)
+	}}
+	o.timeoutFlag(listWorkers)
+	worker.AddCommand(serveWorker, listWorkers)
+	coordinator := commandGroup("coordinator", "Manage the local coordinator")
 	var coordinatorRetention *job.Retention
 	serveCoordinator := &cobra.Command{Use: "serve", Short: "Run the coordinator", Args: cobra.NoArgs, RunE: func(c *cobra.Command, _ []string) error {
 		if err := coordinatorRetention.Validate(); err != nil {
@@ -92,6 +91,8 @@ func newRootCommand() *cobra.Command {
 		return job.ServeCoordinator(c.Context(), o.paths.Socket, s)
 	}}
 	coordinatorRetention = retentionFlags(serveCoordinator)
+	o.daemonFlags(serveCoordinator)
+	o.timeoutFlag(serveCoordinator)
 	coordinator.AddCommand(serveCoordinator)
 	execution := &cobra.Command{Use: "execution", Hidden: true, Args: cobra.NoArgs}
 	var id string
@@ -99,6 +100,7 @@ func newRootCommand() *cobra.Command {
 		return job.Execute(c.Context(), job.Store{Dir: o.paths.State}, id)
 	}}
 	execute.Flags().StringVar(&id, "id", "", "Execution ID")
+	o.daemonFlags(execute)
 	execution.AddCommand(execute)
 	syncGroup := &cobra.Command{Use: "sync", Hidden: true, Args: cobra.NoArgs}
 	var syncID string
@@ -106,9 +108,17 @@ func newRootCommand() *cobra.Command {
 		return job.SyncReceive(c.Context(), job.Store{Dir: o.paths.State}, syncID, args, c.InOrStdin(), c.OutOrStdout(), c.ErrOrStderr())
 	}}
 	receive.Flags().StringVar(&syncID, "id", "", "Reservation ID")
+	o.daemonFlags(receive)
 	syncGroup.AddCommand(receive)
 	root.AddCommand(jobs, worker, coordinator, execution, syncGroup, newSkillCommand(), o.serviceCommand())
-	root.PersistentFlags().VisitAll(func(f *pflag.Flag) { f.DefValue = displayPath(f.DefValue) })
+	var foldDefaults func(*cobra.Command)
+	foldDefaults = func(c *cobra.Command) {
+		c.LocalFlags().VisitAll(func(f *pflag.Flag) { f.DefValue = display.Path(f.DefValue) })
+		for _, child := range c.Commands() {
+			foldDefaults(child)
+		}
+	}
+	foldDefaults(root)
 	setupHelp(root)
 	return root
 }
@@ -209,7 +219,9 @@ func (o *options) runCommand(named bool) *cobra.Command {
 		return follow(c, rpc, id, true)
 	}}
 	c.Flags().StringVar(&source, "source", ".", "Project source directory")
-	c.Flags().StringVar(&project, "project", "relay-jobs.toml", "Project job file relative to source")
+	if named {
+		c.Flags().StringVar(&project, "project", "relay-jobs.toml", "Project job file relative to source")
+	}
 	c.Flags().StringVar(&id, "id", "", "Use a previously generated job ID")
 	c.Flags().StringVar(&policy, "unavailable", "fail", "No reachable worker: fail or local")
 	c.Flags().BoolVar(&detached, "detach", false, "Submit without following output")
@@ -253,17 +265,6 @@ func (o *options) logsCommand() *cobra.Command {
 	}}
 	c.Flags().BoolVar(&wait, "follow", false, "Wait for completion and return command exit status")
 	return c
-}
-func printReceipt(c *cobra.Command, r job.Record) error {
-	receipt := struct {
-		ID          string `json:"id"`
-		State       string `json:"state"`
-		Worker      string `json:"worker"`
-		ExitCode    int    `json:"exit_code"`
-		Error       string `json:"error,omitempty"`
-		LogsExpired bool   `json:"logs_expired,omitempty"`
-	}{r.ID, r.State, r.Worker, r.ExitCode, displayPath(r.Error), r.LogsExpired}
-	return json.NewEncoder(c.OutOrStdout()).Encode(receipt)
 }
 func follow(c *cobra.Command, rpc *job.RPC, id string, wait bool) (result error) {
 	defer func() {
@@ -322,7 +323,9 @@ func follow(c *cobra.Command, rpc *job.RPC, id string, wait bool) (result error)
 		}
 		if rec.Terminal() {
 			if rec.Error != "" {
-				fmt.Fprintln(c.ErrOrStderr(), displayPath(rec.Error))
+				if _, err := fmt.Fprintln(c.ErrOrStderr(), display.Path(rec.Error)); err != nil {
+					return err
+				}
 			}
 			if rec.ExitCode != 0 {
 				return exitError(rec.ExitCode)

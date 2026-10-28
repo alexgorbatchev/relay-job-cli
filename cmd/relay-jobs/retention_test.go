@@ -13,6 +13,7 @@ import (
 )
 
 func TestRetentionCLI(t *testing.T) {
+	t.Setenv("AGENT", "1")
 	for _, command := range [][]string{{"worker", "serve"}, {"coordinator", "serve"}, {"service", "install", "--role", "worker"}} {
 		for _, flag := range []string{"--log-retention=-1h", "--workspace-retention=-1h", "--cleanup-interval=0"} {
 			args := append(append([]string{}, command...), flag)

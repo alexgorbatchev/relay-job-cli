@@ -1,3 +1,6 @@
+# Submit: relay-jobs job run test
+# Inspect: relay-jobs job list; relay-jobs job status <id>
+# Set AGENT=1 for JSON receipts and listings; duration includes queueing and sync.
 [jobs.test]
 command = ["just", "test-local"]
 workers = ["linux"]
