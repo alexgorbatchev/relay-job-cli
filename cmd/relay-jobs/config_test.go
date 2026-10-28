@@ -25,7 +25,8 @@ func configFixture(t *testing.T) (string, job.Config) {
 func TestWorkerDiscoversDefaultConfiguration(t *testing.T) {
 	for _, xdg := range []bool{false, true} {
 		t.Run(map[bool]string{false: "home", true: "xdg"}[xdg], func(t *testing.T) {
-			dir, err := os.MkdirTemp("", "rj-default-")
+			// Keep the default socket below Darwin's sockaddr_un path limit.
+			dir, err := os.MkdirTemp("/tmp", "rj-default-")
 			if err != nil {
 				t.Fatal(err)
 			}
