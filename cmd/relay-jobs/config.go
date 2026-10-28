@@ -11,7 +11,7 @@ import (
 
 func (o *options) configure(c *cobra.Command) error {
 	o.explicit = map[string]bool{}
-	for _, name := range []string{"state", "cache", "socket", "slots", "log-retention", "workspace-retention", "cleanup-interval"} {
+	for _, name := range []string{"state", "cache", "socket", "slots", "worker-timeout", "log-retention", "workspace-retention", "cleanup-interval"} {
 		o.explicit[name] = c.Flags().Changed(name)
 	}
 	if err := o.absolutePaths(); err != nil {
@@ -22,6 +22,16 @@ func (o *options) configure(c *cobra.Command) error {
 		return err
 	}
 	o.config = config
+	if !c.Flags().Changed("worker-timeout") {
+		o.workerTimeout, err = config.Coordinator.Timeout()
+		if err != nil {
+			return err
+		}
+	}
+	if o.workerTimeout <= 0 {
+		return fmt.Errorf("worker-timeout must be positive")
+	}
+	o.config.Coordinator.WorkerTimeout = new(o.workerTimeout.String())
 	workerRole := c.CommandPath() == "relay-jobs worker serve"
 	if c.CommandPath() == "relay-jobs service install" {
 		role, err := c.Flags().GetString("role")

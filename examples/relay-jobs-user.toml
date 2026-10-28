@@ -2,6 +2,9 @@
 # Paths are optional; relative values resolve from this file's directory.
 # Workers default to separate relay-jobs-worker state/cache directories.
 
+[coordinator]
+worker_timeout = "1s"
+
 [worker]
 slots = 2
 

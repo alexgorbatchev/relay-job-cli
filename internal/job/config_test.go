@@ -37,6 +37,7 @@ labels = ["linux", "amd64"]
 		t.Fatal(c, p, err)
 	}
 	for _, text := range []string{
+		"[coordinator]\nworker_timeout = \"0\"", "[coordinator]\nworker_timeout = \"-1s\"", "[coordinator]\nworker_timeout = \"bad\"",
 		`{"workers":[]}`, `unknown = true`, `[worker]
 slot = 2`, `[worker]
 slots = 0`, `[retention]

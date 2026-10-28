@@ -33,8 +33,9 @@ func NewCoordinator(paths Paths, c Config, binary string) *Coordinator {
 	s := &Coordinator{Store: Store{paths.State}, jobs: map[string]task{}, Local: &Worker{Store: Store{paths.State + "/local"}, Binary: binary, Slots: 1, Local: true}}
 	s.Retention = DefaultRetention()
 	s.Local.Retention = s.Retention
+	timeout, _ := c.Coordinator.Timeout() // ReadConfig validates public settings.
 	for _, w := range c.Workers {
-		s.Workers = append(s.Workers, &Transport{Config: w})
+		s.Workers = append(s.Workers, &Transport{Config: w, Timeout: timeout})
 	}
 	return s
 }
@@ -382,20 +383,36 @@ func (c *Coordinator) Handler(ctx context.Context) http.Handler {
 	})
 	mux.HandleFunc("GET /jobs/{id}/log", c.Store.ServeLog)
 	mux.HandleFunc("GET /workers", func(w http.ResponseWriter, r *http.Request) {
+		var timeout time.Duration
+		if value := r.URL.Query().Get("timeout"); value != "" {
+			var err error
+			timeout, err = time.ParseDuration(value)
+			if err != nil || timeout <= 0 {
+				http.Error(w, "timeout must be a positive duration", http.StatusBadRequest)
+				return
+			}
+		}
 		type receipt struct {
 			Name   string `json:"name"`
 			Health Health `json:"health"`
 			Error  string `json:"error,omitempty"`
 		}
-		out := []receipt{}
-		for _, worker := range c.Workers {
-			h, err := worker.Health(r.Context(), Request{})
-			v := receipt{Name: worker.Config.Name, Health: h}
-			if err != nil {
-				v.Error = err.Error()
-			}
-			out = append(out, v)
+		out := make([]receipt, len(c.Workers))
+		var probes sync.WaitGroup
+		for i, worker := range c.Workers {
+			probes.Go(func() {
+				budget := timeout
+				if budget == 0 {
+					budget = worker.healthTimeout()
+				}
+				h, err := worker.health(r.Context(), Request{}, budget)
+				out[i] = receipt{Name: worker.Config.Name, Health: h}
+				if err != nil {
+					out[i].Error = err.Error()
+				}
+			})
 		}
+		probes.Wait()
 		respond(w, out)
 	})
 	return mux

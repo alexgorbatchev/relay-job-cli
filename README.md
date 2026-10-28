@@ -135,10 +135,13 @@ Global flags:
 | `--state <path>` | — | `~/.local/state/relay-jobs` | Durable state; worker default is `relay-jobs-worker` |
 | `--cache <path>` | — | `~/.cache/relay-jobs` | Workspace cache; worker default is `relay-jobs-worker` |
 | `--socket <path>` | — | `<effective-state>/coordinator.sock` | Worker default is `<effective-state>/worker.sock` |
+| `--worker-timeout <duration>` | — | `1s` | Positive availability budget per worker, including SSH setup and health response |
 | `--help` | `-h` | `false` | Command help |
 | `--version` | `-v` | `false` | Raw version and newline |
 
 CLI flags override TOML. Missing default configuration is optional for commands that do not need a worker list; an explicitly selected missing file fails. Unknown TOML keys fail. Relative TOML paths resolve from the configuration file and expand a leading `~`; CLI paths resolve from the caller's directory.
+
+Set `[coordinator] worker_timeout = "1s"` in user TOML to configure the availability budget for scheduling and listing. `--worker-timeout` overrides it; explicit service installation flags persist across restarts. This budget covers waiting for a connection, SSH setup and the health response, rather than command execution. `worker list` probes concurrently, preserves configuration order and reports unavailable workers in each entry's `error` field. An offline worker does not fail the listing; coordinator/API failures still exit nonzero. The CLI allows two additional seconds for the coordinator response. A listing override applies to that request; scheduling uses the running coordinator's settings.
 
 `relay-jobs job exec -- <command...>` and `relay-jobs job run <name>`:
 

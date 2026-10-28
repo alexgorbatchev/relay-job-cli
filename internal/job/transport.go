@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -16,7 +17,9 @@ import (
 
 type Transport struct {
 	Config      WorkerConfig
-	mu          sync.Mutex
+	Timeout     time.Duration
+	once        sync.Once
+	gate        chan struct{}
 	rpc         *RPC
 	cmd         *exec.Cmd
 	done        chan struct{}
@@ -24,9 +27,27 @@ type Transport struct {
 	dir, master string
 }
 
+func (t *Transport) lock(ctx context.Context) error {
+	t.once.Do(func() { t.gate = make(chan struct{}, 1) })
+	select {
+	case t.gate <- struct{}{}:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+func (t *Transport) unlock() { <-t.gate }
+
 func (t *Transport) Connect(ctx context.Context) (*RPC, error) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
+	if _, bounded := ctx.Deadline(); !bounded {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, t.healthTimeout())
+		defer cancel()
+	}
+	if err := t.lock(ctx); err != nil {
+		return nil, err
+	}
+	defer t.unlock()
 	if t.Config.Host == "" {
 		if t.rpc == nil {
 			t.rpc = NewRPC(t.Config.Socket)
@@ -53,7 +74,9 @@ func (t *Transport) Connect(ctx context.Context) (*RPC, error) {
 	t.master = filepath.Join(dir, "ssh")
 	socket := filepath.Join(dir, "api")
 	t.output.Reset()
-	args := []string{"-M", "-S", t.master, "-N", "-o", "BatchMode=yes", "-o", "ConnectTimeout=2", "-o", "ConnectionAttempts=1", "-o", "ServerAliveInterval=5", "-o", "ServerAliveCountMax=1", "-o", "ExitOnForwardFailure=yes", "-L", socket + ":" + t.Config.Socket, t.Config.Host}
+	deadline, _ := ctx.Deadline()
+	seconds := max(1, int64(time.Until(deadline)/time.Second)+1)
+	args := []string{"-M", "-S", t.master, "-N", "-o", "BatchMode=yes", "-o", "ConnectTimeout=" + strconv.FormatInt(seconds, 10), "-o", "ConnectionAttempts=1", "-o", "ServerAliveInterval=5", "-o", "ServerAliveCountMax=1", "-o", "ExitOnForwardFailure=yes", "-L", socket + ":" + t.Config.Socket, t.Config.Host}
 	t.cmd = exec.Command("ssh", args...)
 	t.cmd.Env = append(os.Environ(), "LC_ALL=C")
 	t.cmd.Stderr = &t.output
@@ -65,8 +88,6 @@ func (t *Transport) Connect(ctx context.Context) (*RPC, error) {
 	cmd := t.cmd
 	done := t.done
 	go func() { cmd.Wait(); close(done) }()
-	timer := time.NewTimer(ConnectTimeout)
-	defer timer.Stop()
 	tick := time.NewTicker(10 * time.Millisecond)
 	defer tick.Stop()
 	for {
@@ -78,9 +99,6 @@ func (t *Transport) Connect(ctx context.Context) (*RPC, error) {
 		case <-ctx.Done():
 			t.stop()
 			return nil, ctx.Err()
-		case <-timer.C:
-			t.stop()
-			return nil, fmt.Errorf("worker connection timed out")
 		case <-tick.C:
 			if _, err = os.Stat(socket); err == nil {
 				t.rpc = NewRPC(socket)
@@ -123,15 +141,30 @@ func (t *Transport) stop() {
 	}
 	t.cleanup()
 }
-func (t *Transport) Close() { t.mu.Lock(); defer t.mu.Unlock(); t.stop() }
+func (t *Transport) Close() {
+	_ = t.lock(context.Background())
+	defer t.unlock()
+	t.stop()
+}
+func (t *Transport) healthTimeout() time.Duration {
+	if t.Timeout > 0 {
+		return t.Timeout
+	}
+	return WorkerTimeout
+}
 func (t *Transport) Health(ctx context.Context, r Request) (Health, error) {
+	return t.health(ctx, r, t.healthTimeout())
+}
+func (t *Transport) health(ctx context.Context, r Request, timeout time.Duration) (Health, error) {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
 	var h Health
 	rpc, err := t.Connect(ctx)
 	if err != nil {
 		return h, err
 	}
 	q := url.Values{"source": {r.Source}, "requires": r.Spec.Requires}
-	err = rpc.Call(ctx, "GET", "/health?"+q.Encode(), nil, &h)
+	err = rpc.WithTimeout(0).Call(ctx, "GET", "/health?"+q.Encode(), nil, &h)
 	if err == nil && h.Protocol != Protocol {
 		return h, &APIError{422, "worker protocol mismatch"}
 	}
@@ -157,9 +190,11 @@ func (t *Transport) Sync(ctx context.Context, r Record) error {
 			remote[i] = shellQuote(arg)
 		}
 		args = append(args, "--rsync-path="+strings.Join(remote, " "))
-		t.mu.Lock()
+		if err := t.lock(ctx); err != nil {
+			return err
+		}
 		master := t.master
-		t.mu.Unlock()
+		t.unlock()
 		args = append(args, "-e", "ssh -o BatchMode=yes -o ConnectTimeout=2 -S "+shellQuote(master))
 		dest = t.Config.Host + ":" + dest
 	}

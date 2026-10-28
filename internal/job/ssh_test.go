@@ -55,10 +55,12 @@ func TestSSHWorker(t *testing.T) {
 		t.Fatalf("%q %v", out.String(), err)
 	}
 	// Kill only the connection owned by this transport and verify a new one is established.
-	transport.mu.Lock()
+	if err := transport.lock(ctx); err != nil {
+		t.Fatal(err)
+	}
 	transport.cmd.Process.Kill()
 	done := transport.done
-	transport.mu.Unlock()
+	transport.unlock()
 	<-done
 	if _, err = transport.Health(ctx, req); err != nil {
 		t.Fatal("SSH reconnection failed:", err)

@@ -20,6 +20,21 @@ type WorkerSettings struct {
 	Slots *int `toml:"slots,omitempty"`
 }
 
+type CoordinatorSettings struct {
+	WorkerTimeout *string `toml:"worker_timeout,omitempty"`
+}
+
+func (s CoordinatorSettings) Timeout() (time.Duration, error) {
+	if s.WorkerTimeout == nil {
+		return WorkerTimeout, nil
+	}
+	d, err := time.ParseDuration(*s.WorkerTimeout)
+	if err != nil || d <= 0 {
+		return 0, fmt.Errorf("coordinator.worker_timeout must be a positive duration")
+	}
+	return d, nil
+}
+
 type RetentionSettings struct {
 	Logs       *string `toml:"logs,omitempty"`
 	Workspaces *string `toml:"workspaces,omitempty"`
@@ -45,6 +60,9 @@ func ReadConfig(path string) (Config, error) {
 	}
 	if c.Worker.Slots != nil && *c.Worker.Slots < 1 {
 		return c, fmt.Errorf("worker.slots must be positive")
+	}
+	if _, err := c.Coordinator.Timeout(); err != nil {
+		return c, err
 	}
 	if _, err := c.Retention.Resolve(DefaultRetention()); err != nil {
 		return c, err

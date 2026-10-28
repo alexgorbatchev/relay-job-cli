@@ -1,6 +1,6 @@
 ---
 created_on: 2026-10-25 05:51
-last_modified: 2026-10-28 09:32
+last_modified: 2026-10-28 12:00
 status: current
 ---
 
@@ -21,6 +21,7 @@ Generic Linux/macOS batch runner. Executable: `relay-jobs`.
 - Public configuration is strict TOML; durable receipts and Unix-socket APIs use JSON. Do not add JSON configuration compatibility layers.
 - TOML paths resolve relative to the config file, with leading `~` expansion. CLI paths resolve from the caller's working directory. CLI flags override TOML. Service installation persists only explicit CLI overrides so TOML is reloaded on restart.
 - Coordinator and worker defaults use separate state/cache directories and sockets. Never reuse daemon state for different instances.
+- Probe worker availability concurrently within the positive `--worker-timeout` budget (default 1s, TOML `[coordinator] worker_timeout`), including connection-lock wait, SSH setup and health response. Listing preserves configuration order and returns per-worker errors; its client deadline must outlast the probe budget. Persist explicit timeout installation overrides and reread TOML on restart.
 - Persist assignment before submission. Reconcile ambiguous replies on the same worker and ID; never replay elsewhere or fall back after start submission.
 - Request equality is exhaustive. Nil and empty collections compare equally after JSON omission.
 - Reservations cover sync and execution; a native lock also covers rsync receivers. Preserve excluded dependency directories during checksum synchronization.

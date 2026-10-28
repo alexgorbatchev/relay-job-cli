@@ -128,6 +128,7 @@ func (o *options) serviceCommand() *cobra.Command {
 		}
 		for _, flag := range []struct{ name, value string }{
 			{"state", o.paths.State}, {"cache", o.paths.Cache}, {"socket", o.paths.Socket},
+			{"worker-timeout", o.workerTimeout.String()},
 			{"log-retention", retention.Logs.String()}, {"workspace-retention", retention.Workspaces.String()}, {"cleanup-interval", retention.Interval.String()},
 		} {
 			if o.explicit[flag.name] {

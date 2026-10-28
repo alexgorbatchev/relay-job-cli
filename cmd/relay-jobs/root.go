@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,12 +15,13 @@ import (
 	"github.com/spf13/pflag"
 )
 
-var version = "1.0.0"
+var version = "1.0.1"
 
 type options struct {
-	paths    job.Paths
-	config   job.Config
-	explicit map[string]bool
+	paths         job.Paths
+	config        job.Config
+	explicit      map[string]bool
+	workerTimeout time.Duration
 }
 type exitError int
 
@@ -39,6 +41,7 @@ func newRootCommand() *cobra.Command {
 	root.PersistentFlags().StringVar(&o.paths.State, "state", o.paths.State, "Service state directory")
 	root.PersistentFlags().StringVar(&o.paths.Cache, "cache", o.paths.Cache, "Worker workspace directory")
 	root.PersistentFlags().StringVar(&o.paths.Socket, "socket", o.paths.Socket, "Coordinator or worker socket")
+	root.PersistentFlags().DurationVar(&o.workerTimeout, "worker-timeout", job.WorkerTimeout, "Positive worker availability timeout")
 	jobs := &cobra.Command{Use: "job", Short: "Run and inspect jobs", Args: cobra.NoArgs}
 	jobs.AddCommand(o.runCommand(false), o.runCommand(true), o.statusCommand(), o.logsCommand(), o.cancelCommand())
 	worker := &cobra.Command{Use: "worker", Short: "Manage workers", Args: cobra.NoArgs}
@@ -61,7 +64,10 @@ func newRootCommand() *cobra.Command {
 		rpc := job.NewRPC(o.paths.Socket)
 		defer rpc.Close()
 		var out json.RawMessage
-		if err := rpc.Call(c.Context(), "GET", "/workers", nil, &out); err != nil {
+		// Leave time for the coordinator to return per-worker timeout errors.
+		ctx, cancel := context.WithDeadline(c.Context(), time.Now().Add(o.workerTimeout).Add(job.ConnectTimeout))
+		defer cancel()
+		if err := rpc.WithTimeout(0).Call(ctx, "GET", "/workers?timeout="+url.QueryEscape(o.workerTimeout.String()), nil, &out); err != nil {
 			return err
 		}
 		_, err := fmt.Fprintln(c.OutOrStdout(), string(out))

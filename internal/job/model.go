@@ -34,6 +34,7 @@ const (
 const Protocol = 1
 const PollInterval = 25 * time.Millisecond
 const ConnectTimeout = 2 * time.Second
+const WorkerTimeout = time.Second
 const CancelTimeout = 10 * time.Second
 
 var validID = regexp.MustCompile(`^[a-f0-9]{32}$`)
@@ -60,10 +61,11 @@ type WorkerConfig struct {
 	Labels []string `json:"labels,omitempty" toml:"labels,omitempty"`
 }
 type Config struct {
-	Paths     PathConfig        `toml:"paths,omitempty"`
-	Worker    WorkerSettings    `toml:"worker,omitempty"`
-	Retention RetentionSettings `toml:"retention,omitempty"`
-	Workers   []WorkerConfig    `toml:"workers,omitempty"`
+	Coordinator CoordinatorSettings `toml:"coordinator,omitempty"`
+	Paths       PathConfig          `toml:"paths,omitempty"`
+	Worker      WorkerSettings      `toml:"worker,omitempty"`
+	Retention   RetentionSettings   `toml:"retention,omitempty"`
+	Workers     []WorkerConfig      `toml:"workers,omitempty"`
 }
 type Project struct {
 	Jobs map[string]Spec `toml:"jobs"`

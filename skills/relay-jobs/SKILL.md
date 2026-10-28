@@ -4,7 +4,7 @@ description: Use when submitting remote commands, configuring workers, inspectin
 author: alexgorbatchev
 metadata:
   created_on: 2026-10-22 22:15
-  last_modified: 2026-10-28 09:32
+  last_modified: 2026-10-28 12:00
   status: current
 ---
 
@@ -20,6 +20,7 @@ Invoke without arguments for help. Global flags apply to every command:
 | `--state` | string | `$XDG_STATE_HOME/relay-jobs` | Durable records; base falls back to `~/.local/state`. |
 | `--cache` | string | `$XDG_CACHE_HOME/relay-jobs` | Worker workspaces; base falls back to `~/.cache`. |
 | `--socket` | string | `<default-state>/coordinator.sock` | Runtime default follows effective state; workers use worker.sock. |
+| `--worker-timeout` | duration | 1s | Positive worker availability budget, including SSH setup and health response. |
 | `--help` | bool | false | Print command help; `-h`. |
 | `--version` | bool | false | Print raw version and newline; `-v`. |
 
@@ -41,9 +42,9 @@ socket = "/home/runner/.local/state/relay-jobs-worker/worker.sock"
 labels = ["linux"]
 ```
 
-Optional user tables: `[paths]` accepts `state`, `cache`, `socket`; `[worker]` accepts positive `slots`; `[retention]` accepts duration strings `logs`, `workspaces`, `interval`. They supply defaults for the corresponding serve/install flags. Unknown keys and invalid values fail. Services reread TOML on restart; explicit installation flags remain overrides.
+Optional user tables: `[paths]` accepts `state`, `cache`, `socket`; `[worker]` accepts positive `slots`; `[coordinator]` accepts a positive `worker_timeout` duration string (default `"1s"`); `[retention]` accepts duration strings `logs`, `workspaces`, `interval`. They supply defaults for the corresponding serve/install flags. Unknown keys and invalid values fail. Services reread TOML on restart; explicit installation flags remain overrides.
 
-Use SSH aliases with preconfigured keys and trusted host keys. An omitted `host` connects to a local worker socket, useful for additional local agents. Worker names are unique; `local` identifies fallback and is reserved. Configure multiple entries to enable scheduling. Prefer matching workers with warm workspaces, then lower occupancy. Busy workers queue jobs. SSH connection setup is bounded to two seconds per worker and happens concurrently during selection. Authentication, host-key, protocol, and missing-tool errors require configuration repair.
+Use SSH aliases with preconfigured keys and trusted host keys. An omitted `host` connects to a local worker socket, useful for additional local agents. Worker names are unique; `local` identifies fallback and is reserved. Configure multiple entries to enable scheduling. Prefer matching workers with warm workspaces, then lower occupancy. Busy workers queue jobs. Availability probes run concurrently within `--worker-timeout`, covering connection-lock wait, SSH setup and health response. This does not limit command execution. Authentication, host-key, protocol, and missing-tool errors require configuration repair.
 
 For mixed operating systems, specify `--workers` or `--labels` on platform-dependent jobs. Without either filter, any configured worker is eligible. Exclude host-built dependencies and caches before synchronizing to another OS.
 
@@ -76,7 +77,7 @@ On macOS, commands and execution supervisors have separate native launchd jobs. 
 
 ## `relay-jobs worker list`
 
-Ask the coordinator for each configured worker's health, occupancy, protocol, and connection error. Print JSON; inspect each entry's error field. Checking health creates reusable SSH tunnels.
+Ask the coordinator for each configured worker's health, occupancy, protocol, and connection error. Print JSON in configuration order; inspect each entry's error field. Probes run concurrently; unavailable workers are per-entry errors and do not fail the command. Coordinator/API failures exit nonzero. `--worker-timeout` overrides TOML for this request; the client allows two additional seconds to receive the response. Scheduling uses the running coordinator's settings. Checking health creates reusable SSH tunnels.
 
 ## `relay-jobs job`
 
