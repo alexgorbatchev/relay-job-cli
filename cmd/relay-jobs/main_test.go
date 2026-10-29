@@ -240,9 +240,7 @@ func socketServer(t *testing.T, h http.Handler) string {
 	return socket
 }
 func TestCLIJobWorkflow(t *testing.T) {
-	if err := exec.Command("systemctl", "--user", "show-environment").Run(); err != nil {
-		t.Skip("requires user systemd")
-	}
+	requireNativeManager(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	w := &job.Worker{Store: job.Store{Dir: t.TempDir()}, Cache: t.TempDir(), Binary: integrationBinary, Slots: 2}
