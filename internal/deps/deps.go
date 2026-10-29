@@ -7,7 +7,6 @@ import (
 	"regexp"
 
 	"github.com/alexgorbatchev/godeps"
-	"github.com/alexgorbatchev/relay-jobs-cli/internal/agent"
 )
 
 // AppName selects the managed executable directory prepended to PATH.
@@ -38,9 +37,6 @@ func manager() *godeps.Manager {
 // Ensure verifies services' executables and lets an interactive user install
 // missing or outdated ones. Agent mode never prompts.
 func Ensure(ctx context.Context, in io.Reader, out io.Writer) error {
-	if agent.IsAgentMode() {
-		return Verify(ctx)
-	}
 	return manager().Ensure(ctx, godeps.EnsureOptions{Input: in, Output: out})
 }
 

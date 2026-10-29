@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	cobrahelptree "github.com/alexgorbatchev/cobra-help-tree/v2"
-	"github.com/alexgorbatchev/relay-jobs-cli/internal/agent"
+	"github.com/alexgorbatchev/godeps"
 	"github.com/mattn/go-runewidth"
 	"github.com/spf13/cobra"
 )
@@ -28,14 +28,14 @@ func setupHelp(cmd *cobra.Command) {
 		Tree:    cobrahelptree.TreeOptions{HideGeneratedCommands: true},
 	})
 	cmd.SetHelpFunc(func(c *cobra.Command, args []string) {
-		if agent.IsAgentMode() {
+		if godeps.IsAgentMode() {
 			if _, err := fmt.Fprintln(c.OutOrStdout(), "ALERT: Agents must read `AGENT=1 relay-jobs skill` before using this tool."); err != nil {
 				c.PrintErrln(err)
 				return
 			}
 		}
 		var screen string
-		if agent.IsAgentMode() {
+		if godeps.IsAgentMode() {
 			screen = cobrahelptree.RenderAgentHelp(c, techCatalog, cobrahelptree.AgentOptions{})
 		} else {
 			options := humanHelpOptions()
@@ -48,7 +48,7 @@ func setupHelp(cmd *cobra.Command) {
 	cmd.SetUsageFunc(func(c *cobra.Command) error {
 		options := humanHelpOptions()
 		screen := boundedHelp(cobrahelptree.RenderTreeUsage(c, techCatalog, options), options.TerminalWidth)
-		if agent.IsAgentMode() {
+		if godeps.IsAgentMode() {
 			screen = "ALERT: Agents must read `AGENT=1 relay-jobs skill` before using this tool.\n" + cobrahelptree.RenderAgentHelp(c, techCatalog, cobrahelptree.AgentOptions{})
 		}
 		_, err := fmt.Fprint(c.ErrOrStderr(), screen)

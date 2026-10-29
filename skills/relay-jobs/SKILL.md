@@ -4,7 +4,7 @@ description: Use when submitting remote commands, configuring workers, inspectin
 author: alexgorbatchev
 metadata:
   created_on: 2026-10-22 22:15
-  last_modified: 2026-10-29 11:50
+  last_modified: 2026-10-29 12:05
   status: current
 ---
 
@@ -31,7 +31,7 @@ Manage the primary machine's coordinator.
 
 Read the worker config and serve until SIGINT/SIGTERM/SIGHUP. Recover durable jobs by their existing IDs. Requires `ssh`, rsync 3.0.0 or newer, and the OS's native manager for local fallback. macOS's bundled openrsync is too old; use Homebrew's `rsync`.
 
-Before serving, `coordinator serve` and `worker serve` prepend `$XDG_DATA_HOME/relay-jobs/bin` (default `~/.local/share/relay-jobs/bin`) to PATH and check rsync. An interactive terminal offers a `[y/N]` installation through Homebrew, apt-get, pacman, or dnf; declining, closed stdin, services, and `AGENT=1` exit 1 with the detected version. The SSH sync receiver checks the worker's non-interactive SSH command PATH without prompting.
+Before serving, `coordinator serve` and `worker serve` prepend `$XDG_DATA_HOME/relay-jobs/bin` (default `~/.local/share/relay-jobs/bin`) to PATH and check rsync. An interactive terminal offers a `[y/N]` installation through Homebrew, apt-get, pacman, or dnf; declining, closed stdin, services, and `AGENT=1` exit 1 with the detected version. `AGENT` values `1`, `true`, and `yes` select agent mode. The SSH sync receiver checks the worker's non-interactive SSH command PATH without prompting.
 
 Worker configuration:
 

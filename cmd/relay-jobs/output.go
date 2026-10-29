@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/alexgorbatchev/relay-jobs-cli/internal/agent"
+	"github.com/alexgorbatchev/godeps"
 	"github.com/alexgorbatchev/relay-jobs-cli/internal/display"
 	"github.com/alexgorbatchev/relay-jobs-cli/internal/job"
 	"github.com/spf13/cobra"
@@ -51,7 +51,7 @@ func humanReceipt(r jobReceipt) string {
 
 func printReceipt(c *cobra.Command, r job.Record) error {
 	out := receipt(r, time.Now())
-	if agent.IsAgentMode() {
+	if godeps.IsAgentMode() {
 		return json.NewEncoder(c.OutOrStdout()).Encode(out)
 	}
 	_, err := fmt.Fprint(c.OutOrStdout(), humanReceipt(out))
@@ -71,7 +71,7 @@ func (o *options) listCommand() *cobra.Command {
 		for _, r := range records {
 			out = append(out, receipt(r, now))
 		}
-		if agent.IsAgentMode() {
+		if godeps.IsAgentMode() {
 			return json.NewEncoder(c.OutOrStdout()).Encode(out)
 		}
 		if len(out) == 0 {
@@ -107,7 +107,7 @@ func printWorkers(c *cobra.Command, workers []workerReceipt) error {
 			workers[i].Health.Missing[j] = display.Path(missing)
 		}
 	}
-	if agent.IsAgentMode() {
+	if godeps.IsAgentMode() {
 		return json.NewEncoder(c.OutOrStdout()).Encode(workers)
 	}
 	if len(workers) == 0 {

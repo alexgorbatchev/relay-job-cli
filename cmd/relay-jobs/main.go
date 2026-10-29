@@ -10,7 +10,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/alexgorbatchev/relay-jobs-cli/internal/agent"
+	"github.com/alexgorbatchev/godeps"
 	"github.com/alexgorbatchev/relay-jobs-cli/internal/display"
 	"github.com/spf13/cobra"
 )
@@ -39,7 +39,7 @@ func run(cmd *cobra.Command) int {
 		if out.err == nil && stderr.err == nil && errors.As(err, &exit) {
 			return int(exit)
 		}
-		if agent.IsAgentMode() {
+		if godeps.IsAgentMode() {
 			fmt.Fprintf(cmd.ErrOrStderr(), "ERR: %s\n", display.Path(err.Error()))
 		} else {
 			fmt.Fprintf(cmd.ErrOrStderr(), "[ERROR] %s\n", display.Path(err.Error()))

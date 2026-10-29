@@ -5,13 +5,13 @@ import (
 	"io"
 	"log/slog"
 
-	"github.com/alexgorbatchev/relay-jobs-cli/internal/agent"
+	"github.com/alexgorbatchev/godeps"
 	"github.com/alexgorbatchev/relay-jobs-cli/internal/display"
 )
 
 func diagnosticLogger(w io.Writer) *slog.Logger {
 	return slog.New(slog.NewTextHandler(w, &slog.HandlerOptions{ReplaceAttr: func(_ []string, a slog.Attr) slog.Attr {
-		if agent.IsAgentMode() && a.Key == slog.TimeKey {
+		if godeps.IsAgentMode() && a.Key == slog.TimeKey {
 			return slog.Attr{}
 		}
 		switch a.Value.Kind() {
