@@ -52,11 +52,15 @@ func newRootCommand() *cobra.Command {
 		if err := deps.Ensure(c.Context(), c.InOrStdin(), c.ErrOrStderr()); err != nil {
 			return err
 		}
+		rsync, err := deps.Rsync()
+		if err != nil {
+			return err
+		}
 		binary, err := os.Executable()
 		if err != nil {
 			return err
 		}
-		w := &job.Worker{Store: job.Store{Dir: o.paths.State}, Cache: o.paths.Cache, Binary: binary, Slots: slots, Retention: *workerRetention}
+		w := &job.Worker{Store: job.Store{Dir: o.paths.State}, Cache: o.paths.Cache, Binary: binary, Rsync: rsync, Slots: slots, Retention: *workerRetention}
 		return job.ServeWorker(c.Context(), o.paths.Socket, w)
 	}}
 	workerRetention = retentionFlags(serveWorker)
@@ -112,10 +116,6 @@ func newRootCommand() *cobra.Command {
 	syncGroup := &cobra.Command{Use: "sync", Hidden: true, Args: cobra.NoArgs}
 	var syncID string
 	receive := &cobra.Command{Use: "serve", Hidden: true, Args: cobra.MinimumNArgs(1), RunE: func(c *cobra.Command, args []string) error {
-		// Standard input carries the rsync protocol, so never prompt here.
-		if err := deps.Verify(c.Context()); err != nil {
-			return err
-		}
 		return job.SyncReceive(c.Context(), job.Store{Dir: o.paths.State}, syncID, args, c.InOrStdin(), c.OutOrStdout(), c.ErrOrStderr())
 	}}
 	receive.Flags().StringVar(&syncID, "id", "", "Reservation ID")

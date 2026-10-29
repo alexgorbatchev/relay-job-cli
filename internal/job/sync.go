@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"slices"
 	"time"
 )
@@ -97,7 +98,10 @@ func SyncReceive(ctx context.Context, s Store, id string, args []string, in io.R
 	if len(args) < 2 || args[0] != "--server" || slices.Contains(args, "--sender") {
 		return fmt.Errorf("reserved sync requires an rsync receiver")
 	}
-	cmd := exec.CommandContext(ctx, "rsync", args...)
+	if !filepath.IsAbs(r.SyncRsync) {
+		return fmt.Errorf("source-sync reservation has no verified rsync")
+	}
+	cmd := exec.CommandContext(ctx, r.SyncRsync, args...)
 	cmd.Stdin = in
 	cmd.Dir = r.Workspace
 	cmd.Stdout = out

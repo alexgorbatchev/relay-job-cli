@@ -101,6 +101,7 @@ type Record struct {
 	LeaseUntil    time.Time `json:"lease_until,omitempty"`
 	SyncState     string    `json:"sync_state,omitempty"`
 	SyncBinary    string    `json:"sync_binary,omitempty"`
+	SyncRsync     string    `json:"sync_rsync,omitempty"`
 	Created       time.Time `json:"created"`
 	Updated       time.Time `json:"updated"`
 	LogsCollected bool      `json:"logs_collected,omitempty"`

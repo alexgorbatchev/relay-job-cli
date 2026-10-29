@@ -4,6 +4,7 @@ package deps
 import (
 	"context"
 	"io"
+	"os/exec"
 	"regexp"
 
 	"github.com/alexgorbatchev/godeps"
@@ -40,12 +41,8 @@ func Ensure(ctx context.Context, in io.Reader, out io.Writer) error {
 	return manager().Ensure(ctx, godeps.EnsureOptions{Input: in, Output: out})
 }
 
-// Verify checks executables without prompting, for processes whose standard
-// input carries protocol data.
-func Verify(ctx context.Context) error {
-	if err := godeps.InitManagedPath(AppName); err != nil {
-		return err
-	}
-	_, err := manager().Verify(ctx)
-	return err
+// Rsync resolves the rsync that Ensure verified, using the same PATH lookup.
+// LookPath rejects relative PATH matches, so a resolved path is absolute.
+func Rsync() (string, error) {
+	return exec.LookPath("rsync")
 }

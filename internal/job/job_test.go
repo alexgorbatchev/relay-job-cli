@@ -18,11 +18,14 @@ import (
 	"github.com/pelletier/go-toml/v2"
 )
 
-var testBinary string
+var testBinary, testRsync string
 
 func TestMain(m *testing.M) {
+	var err error
+	if testRsync, err = exec.LookPath("rsync"); err != nil {
+		panic(err)
+	}
 	if binary := os.Getenv("RELAY_JOBS_TEST_BINARY"); binary != "" {
-		var err error
 		testBinary, err = filepath.Abs(binary)
 		if err != nil {
 			panic(err)
@@ -51,7 +54,7 @@ func request(t *testing.T, command ...string) Request {
 }
 func worker(t *testing.T, slots int) *Worker {
 	t.Helper()
-	return &Worker{Store: Store{t.TempDir()}, Cache: t.TempDir(), Binary: testBinary, Slots: slots}
+	return &Worker{Store: Store{t.TempDir()}, Cache: t.TempDir(), Binary: testBinary, Rsync: testRsync, Slots: slots}
 }
 func systemd(t *testing.T) {
 	t.Helper()

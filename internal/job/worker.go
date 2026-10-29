@@ -29,6 +29,7 @@ const preparedLease = 5 * time.Minute
 type Worker struct {
 	Store         Store
 	Cache, Binary string
+	Rsync         string // verified absolute path; sshd's command PATH may differ
 	Slots         int
 	Local         bool
 	Retention     Retention
@@ -138,7 +139,7 @@ func (w *Worker) Prepare(r Request) (Record, error) {
 	if err = os.MkdirAll(dir, 0700); err != nil {
 		return Record{}, err
 	}
-	rec := Record{Request: r, State: statePrepared, Workspace: dir, Created: time.Now().UTC(), ExitCode: -1, LeaseUntil: time.Now().Add(preparedLease), SyncState: w.Store.Dir, SyncBinary: w.Binary}
+	rec := Record{Request: r, State: statePrepared, Workspace: dir, Created: time.Now().UTC(), ExitCode: -1, LeaseUntil: time.Now().Add(preparedLease), SyncState: w.Store.Dir, SyncBinary: w.Binary, SyncRsync: w.Rsync}
 	if err = w.Store.Put(rec); err != nil {
 		return rec, err
 	}

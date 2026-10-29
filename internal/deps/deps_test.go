@@ -43,9 +43,11 @@ func TestParseRsync(t *testing.T) {
 	}
 }
 
-func TestVerify(t *testing.T) {
+func TestEnsureReportsInAgentMode(t *testing.T) {
 	fakeRsync(t, upstreamBanner)
-	if err := Verify(context.Background()); err != nil {
+	t.Setenv("AGENT", "1")
+	var out strings.Builder
+	if err := Ensure(context.Background(), strings.NewReader(""), &out); err != nil {
 		t.Fatal(err)
 	}
 	managed := filepath.Join(os.Getenv("XDG_DATA_HOME"), AppName, "bin")
@@ -53,13 +55,33 @@ func TestVerify(t *testing.T) {
 		t.Fatalf("managed directory not prepended: %s", os.Getenv("PATH"))
 	}
 	for banner, want := range map[string]string{
-		openrsyncBanner: "version 2.6.9) is outdated, must be version 3.0.0 or newer",
+		openrsyncBanner: "rsync version 2.6.9 in $PATH is outdated",
 		"":              "rsync is missing in $PATH",
 	} {
 		fakeRsync(t, banner)
-		if err := Verify(context.Background()); err == nil || !strings.Contains(err.Error(), want) {
-			t.Errorf("banner %q: %v, want %q", banner, err, want)
+		t.Setenv("AGENT", "1")
+		if err := Ensure(context.Background(), strings.NewReader("y\n"), &out); err == nil || !strings.Contains(err.Error(), want) || out.Len() != 0 {
+			t.Errorf("banner %q: %v %q, want %q without a prompt", banner, err, out.String(), want)
 		}
+	}
+}
+
+func TestRsyncResolvesVerifiedExecutable(t *testing.T) {
+	fakeRsync(t, upstreamBanner)
+	dir := os.Getenv("PATH")
+	got, err := Rsync()
+	if err != nil || got != filepath.Join(dir, "rsync") {
+		t.Fatalf("Rsync() = %q, %v", got, err)
+	}
+	// A relative PATH entry never yields a relative receiver path.
+	t.Chdir(filepath.Dir(dir))
+	t.Setenv("PATH", filepath.Base(dir))
+	if got, err = Rsync(); err == nil {
+		t.Fatalf("relative PATH resolved %q", got)
+	}
+	fakeRsync(t, "")
+	if _, err = Rsync(); err == nil {
+		t.Fatal("missing rsync resolved")
 	}
 }
 

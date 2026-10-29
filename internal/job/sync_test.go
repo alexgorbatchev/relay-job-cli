@@ -3,6 +3,9 @@ package job
 import (
 	"context"
 	"io"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -77,5 +80,38 @@ func TestSyncReservationValidation(t *testing.T) {
 	}
 	if err = SyncReceive(context.Background(), w.Store, NewID(), []string{"--server", "-r", rec.Workspace}, nil, io.Discard, io.Discard); err == nil {
 		t.Fatal("unknown reservation accepted")
+	}
+}
+
+func TestSyncReceiverRunsRecordedRsync(t *testing.T) {
+	tools := t.TempDir()
+	marker := filepath.Join(tools, "args")
+	script := "#!/bin/sh\nprintf '%s ' \"$@\" > '" + marker + "'\n"
+	if err := os.WriteFile(filepath.Join(tools, "rsync"), []byte(script), 0755); err != nil {
+		t.Fatal(err)
+	}
+	path := os.Getenv("PATH")
+	for _, recorded := range []string{"", "rsync", filepath.Join(tools, "rsync")} {
+		t.Setenv("PATH", path)
+		w := worker(t, 1)
+		w.Rsync = recorded
+		req := request(t, "true")
+		rec, err := w.Prepare(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// sshd's command PATH may only reach an incompatible rsync.
+		t.Setenv("PATH", t.TempDir())
+		err = SyncReceive(context.Background(), w.Store, req.ID, []string{"--server", "-r", "."}, nil, io.Discard, io.Discard)
+		if !filepath.IsAbs(recorded) {
+			if err == nil || !strings.Contains(err.Error(), "no verified rsync") {
+				t.Fatalf("recorded %q: %v", recorded, err)
+			}
+			continue
+		}
+		got, readErr := os.ReadFile(marker)
+		if err != nil || readErr != nil || string(got) != "--server -r . " {
+			t.Fatalf("recorded rsync not used: %v %v %q (workspace %s)", err, readErr, got, rec.Workspace)
+		}
 	}
 }
