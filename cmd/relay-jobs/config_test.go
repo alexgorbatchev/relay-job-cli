@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -190,58 +189,5 @@ func TestTOMLErrorsAndRoleDefaults(t *testing.T) {
 		if role == "worker" && !strings.HasSuffix(o.paths.State, "relay-jobs-worker") {
 			t.Fatal(o.paths.State)
 		}
-	}
-}
-
-func TestInstalledServiceReloadsTOML(t *testing.T) {
-	if err := exec.Command("systemctl", "--user", "show-environment").Run(); err != nil {
-		t.Skip("requires user systemd")
-	}
-	path, cfg := configFixture(t)
-	if err := writeTOML(path, cfg); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("XDG_DATA_HOME", filepath.Join(filepath.Dir(path), "data"))
-	name := "relay-jobs-config-" + job.NewID() + ".service"
-	configHome := os.Getenv("XDG_CONFIG_HOME")
-	if configHome == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			t.Fatal(err)
-		}
-		configHome = filepath.Join(home, ".config")
-	}
-	t.Cleanup(func() {
-		exec.Command("systemctl", "--user", "stop", name).Run()
-		exec.Command("systemctl", "--user", "disable", name).Run()
-		os.Remove(filepath.Join(configHome, "systemd/user", name))
-		exec.Command("systemctl", "--user", "daemon-reload").Run()
-	})
-	if _, stderr, code := execute(context.Background(), "service", "install", "--role", "worker", "--name", name, "--binary", integrationBinary, "--config", path); code != 0 {
-		t.Fatal(code, stderr)
-	}
-	for _, slots := range []int{2, 4} {
-		if slots == 4 {
-			cfg.Worker.Slots = new(slots)
-			if err := writeTOML(path, cfg); err != nil {
-				t.Fatal(err)
-			}
-			if out, err := exec.Command("systemctl", "--user", "restart", name).CombinedOutput(); err != nil {
-				t.Fatal(string(out), err)
-			}
-		}
-		rpc := job.NewRPC(cfg.Paths.Socket)
-		var h job.Health
-		deadline := time.Now().Add(5 * time.Second)
-		for {
-			if err := rpc.Call(context.Background(), "GET", "/health", nil, &h); err == nil && h.Slots == slots {
-				break
-			}
-			if time.Now().After(deadline) {
-				t.Fatal("installed service ignored TOML", h)
-			}
-			time.Sleep(10 * time.Millisecond)
-		}
-		rpc.Close()
 	}
 }

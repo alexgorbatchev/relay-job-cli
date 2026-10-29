@@ -30,11 +30,20 @@ func TestGroupValidationAndScopedFlags(t *testing.T) {
 		{"job", "status", job.NewID(), "--state", "/tmp/state"},
 		{"job", "list", "--worker-timeout", "1s"},
 		{"worker", "serve", "--worker-timeout", "1s"},
-		{"service", "install", "--role", "worker", "--worker-timeout", "1s"},
-		{"service", "install", "--role", "coordinator", "--slots", "2"},
 	} {
 		if _, stderr, code := execute(context.Background(), args...); code != 1 || stderr == "" {
 			t.Fatalf("accepted %v: %d %q", args, code, stderr)
+		}
+	}
+	// Installation flags are validated before any platform-specific work.
+	for want, args := range map[string][]string{
+		"--worker-timeout applies only to the coordinator role": {"--role", "worker", "--worker-timeout", "1s"},
+		"--slots applies only to the worker role":               {"--role", "coordinator", "--slots", "2"},
+		"role must be coordinator or worker":                    {"--role", "invalid"},
+		"slots must be positive":                                {"--role", "worker", "--slots", "0"},
+	} {
+		if _, stderr, code := execute(context.Background(), append([]string{"service", "install"}, args...)...); code != 1 || !strings.Contains(stderr, want) {
+			t.Fatalf("service install %v: %d %q, want %q", args, code, stderr, want)
 		}
 	}
 	for _, args := range [][]string{

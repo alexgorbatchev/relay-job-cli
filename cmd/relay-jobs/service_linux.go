@@ -17,18 +17,6 @@ func unitQuote(s string) string {
 	return `"` + strings.NewReplacer(`\`, `\\`, `"`, `\"`, `%`, `%%`, "\n", `\n`, "\r", `\r`, "\t", `\t`).Replace(s) + `"`
 }
 func (o *options) installService(c *cobra.Command, role string, slots int, name, binary string, retention *job.Retention) error {
-	if role != "coordinator" && role != "worker" {
-		return fmt.Errorf("role must be coordinator or worker")
-	}
-	if role == "worker" && c.Flags().Changed("worker-timeout") {
-		return fmt.Errorf("--worker-timeout applies only to the coordinator role")
-	}
-	if role == "coordinator" && o.explicit["slots"] {
-		return fmt.Errorf("--slots applies only to the worker role")
-	}
-	if slots < 1 {
-		return fmt.Errorf("slots must be positive")
-	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return err
