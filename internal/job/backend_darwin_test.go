@@ -120,6 +120,12 @@ func TestDarwinCancellationAndSupervisorLoss(t *testing.T) {
 			w := darwinWorker(t)
 			r := darwinPrepare(t, w, "sleep 120 & echo $! > child.pid; wait")
 			pid := darwinChild(t, r)
+			for _, label := range []string{Unit(r.ID), commandUnit(r.ID)} {
+				out, err := exec.Command("/bin/launchctl", "print", launchd.Domain()+"/"+label).CombinedOutput()
+				if err != nil || !strings.Contains(string(out), "\n\tspawn type = daemon (3)\n") {
+					t.Fatalf("%s is not a standard launchd job: %v\n%s", label, err, out)
+				}
+			}
 			want := stateCanceled
 			if loss {
 				if out, err := exec.Command("/bin/launchctl", "kill", "SIGKILL", launchd.Domain()+"/"+Unit(r.ID)).CombinedOutput(); err != nil {

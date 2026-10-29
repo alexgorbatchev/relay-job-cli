@@ -26,7 +26,7 @@ Generic Linux/macOS batch runner. Executable: `relay-jobs`.
 - Request equality is exhaustive. Nil and empty collections compare equally after JSON omission.
 - Reservations cover sync and execution; a native lock also covers rsync receivers. Preserve excluded dependency directories during checksum synchronization.
 - Keep file writes atomic and durable, original stdout/stderr bytes separate, collection batches bounded, and workspace release after process cleanup.
-- Linux uses systemd execution units; macOS uses separate launchd supervisor and command jobs. Supervisor loss stops descendants and produces an explicit lost result.
+- Linux uses systemd execution units; macOS uses separate launchd supervisor and command jobs with `ProcessType` `Standard`; `Background` lets macOS delay and throttle user-requested commands on a busy worker. Supervisor loss stops descendants and produces an explicit lost result.
 - Stopping execution returns only after the supervisor exits. `launchctl bootout` returns early, so macOS waits for the supervisor's per-job `execution.lock`, held until its workspace lock and final receipt are released.
 - Declare external executables and minimum versions in `internal/deps` with godeps, and use godeps for agent-mode detection. Serve commands call godeps `Ensure`. Workers record the verified absolute rsync in each reservation; the SSH sync receiver runs that path and never searches sshd's command PATH.
 - Parse only direct job properties in native launchctl status dumps. Nested coalition/environment dictionaries reuse `state` and exit-status keys; their values must never override the job. Preserve annotated sysexits values such as `78: EX_CONFIG` as the numeric command status.

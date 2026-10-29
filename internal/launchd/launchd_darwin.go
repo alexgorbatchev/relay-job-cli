@@ -37,10 +37,12 @@ func Write(ctx context.Context, path string, spec Spec) error {
 	if err := os.Chmod(path, 0600); err != nil {
 		return err
 	}
+	// Callers wait on these user-requested commands. Background would let macOS
+	// delay and throttle them whenever the worker is busy.
 	fields := map[string]any{
 		"Label": spec.Label, "ProgramArguments": spec.Arguments, "RunAtLoad": true,
 		"KeepAlive": spec.KeepAlive, "AbandonProcessGroup": false, "ExitTimeOut": 10,
-		"Umask": 63, "ProcessType": "Background",
+		"Umask": 63, "ProcessType": "Standard",
 		"LimitLoadToSessionType": "Background",
 	}
 	if len(spec.Environment) > 0 {

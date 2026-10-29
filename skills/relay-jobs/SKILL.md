@@ -4,7 +4,7 @@ description: Use when submitting remote commands, configuring workers, inspectin
 author: alexgorbatchev
 metadata:
   created_on: 2026-10-22 22:15
-  last_modified: 2026-10-29 15:31
+  last_modified: 2026-10-29 16:25
   status: current
 ---
 
@@ -90,7 +90,7 @@ Manage worker agents.
 
 Serve a private worker API. Supply distinct `--socket`, `--state`, and `--cache` when hosting multiple agents on one machine. Linux requires `systemd-run`, `systemctl` and a running user manager. macOS requires native `launchctl`, `plutil` and a user domain. Both require rsync 3.0.0 or newer, checked at startup as for `coordinator serve`, and the job's toolchain. Install workspace dependencies from lockfiles or through a bootstrap job.
 
-On macOS, commands and execution supervisors have separate native launchd jobs. Agent restarts preserve execution; supervisor loss stops the command and reports a lost receipt.
+On macOS, commands and execution supervisors have separate standard-priority native launchd jobs, not throttled background jobs. Agent restarts preserve execution; supervisor loss stops the command and reports a lost receipt.
 
 | Flag | Type | Default | Purpose |
 | --- | --- | --- | --- |
