@@ -218,7 +218,7 @@ func TestWorkerAndDiagnosticPathFormatting(t *testing.T) {
 			if err := json.Unmarshal(out.Bytes(), &got); err != nil || len(got) != 1 || got[0].Health.Busy != 1 {
 				t.Fatal(out.String(), err)
 			}
-		} else if !strings.Contains(out.String(), "Missing tools: go") || !strings.Contains(out.String(), "Busy: 1") {
+		} else if !strings.Contains(out.String(), "MISSING TOOLS") || !strings.Contains(out.String(), "│ build") {
 			t.Fatal(out.String())
 		}
 		out.Reset()
@@ -226,5 +226,95 @@ func TestWorkerAndDiagnosticPathFormatting(t *testing.T) {
 		if strings.Contains(out.String(), home) || !strings.Contains(out.String(), "~/record") {
 			t.Fatal(out.String())
 		}
+	}
+}
+
+func TestWorkerTable(t *testing.T) {
+	t.Setenv("AGENT", "0")
+	c := newRootCommand()
+	var out bytes.Buffer
+	c.SetOut(&out)
+	workers := []workerReceipt{
+		{Name: "linux", Health: job.Health{Protocol: 1, Slots: 2, Busy: 1, Warm: true, Missing: []string{"go", "rsync"}}},
+		{Name: "macos", Error: "context deadline exceeded"},
+	}
+	if err := printWorkers(c, workers); err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
+	width := runewidth.StringWidth(lines[0])
+	var rows [][]string
+	for _, line := range lines {
+		if runewidth.StringWidth(line) != width {
+			t.Fatalf("misaligned table: %s", out.String())
+		}
+		if strings.HasPrefix(line, "│ linux ") || strings.HasPrefix(line, "│ macos ") {
+			cells := strings.Split(line, "│")[1:7]
+			for i := range cells {
+				cells[i] = strings.TrimSpace(cells[i])
+			}
+			rows = append(rows, cells)
+		}
+	}
+	if len(rows) != 2 || strings.Join(rows[0], "|") != "linux|1|1/2|—|go, rsync|unavailable" || strings.Join(rows[1], "|") != "macos|—|—|—|—|unreachable: context deadline exceeded" {
+		t.Fatalf("worker fields or order lost: %s", out.String())
+	}
+	out.Reset()
+	workers[1].Error = strings.Repeat("connection ", 12) + "retry later"
+	if err := printWorkers(c, workers); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "retry later") || strings.Count(out.String(), "connection") != 12 {
+		t.Fatalf("wrapped error lost content: %s", out.String())
+	}
+	for _, mode := range []string{"0", "1"} {
+		t.Setenv("AGENT", mode)
+		out.Reset()
+		if err := printWorkers(c, nil); err != nil {
+			t.Fatal(err)
+		}
+		want := "No workers configured.\n"
+		if mode == "1" {
+			want = "[]\n"
+		}
+		if out.String() != want {
+			t.Fatal(out.String())
+		}
+		f, err := os.CreateTemp(t.TempDir(), "closed")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := f.Close(); err != nil {
+			t.Fatal(err)
+		}
+		c.SetOut(f)
+		if err := printWorkers(c, workers); err == nil {
+			t.Fatal("lost output write failure")
+		}
+		c.SetOut(&out)
+	}
+}
+
+func TestWorkerStatus(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		health job.Health
+		err    string
+		want   string
+	}{
+		{"idle", job.Health{Protocol: job.Protocol, Slots: 2}, "", "ready"},
+		{"occupied", job.Health{Protocol: job.Protocol, Slots: 2, Busy: 1}, "", "working"},
+		{"full", job.Health{Protocol: job.Protocol, Slots: 2, Busy: 2}, "", "working"},
+		{"probe failure", job.Health{}, "context deadline exceeded", "unreachable"},
+		{"protocol mismatch", job.Health{Protocol: job.Protocol + 1, Slots: 2}, "worker protocol mismatch", "incompatible"},
+		{"no capacity", job.Health{Protocol: job.Protocol}, "", "unavailable"},
+		{"missing tool", job.Health{Protocol: job.Protocol, Slots: 2, Missing: []string{"rsync"}}, "", "unavailable"},
+		{"no health", job.Health{}, "", "unavailable"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := workerStatus(workerReceipt{Health: tc.health, Error: tc.err}); got != tc.want {
+				t.Fatalf("status = %q, want %q", got, tc.want)
+			}
+		})
 	}
 }

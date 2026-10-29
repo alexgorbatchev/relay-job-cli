@@ -1,3 +1,5 @@
+# Inspect workers: relay-jobs worker list
+# Human mode prints Status and occupied/total Slots; AGENT=1 prints JSON.
 # User configuration: ~/.config/relay-jobs/relay-jobs.toml
 # Paths are optional; relative values resolve from this file's directory.
 # Workers default to separate relay-jobs-worker state/cache directories.

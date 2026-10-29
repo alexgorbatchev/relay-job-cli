@@ -9,6 +9,8 @@ import (
 	"github.com/alexgorbatchev/godeps"
 	"github.com/alexgorbatchev/relay-jobs-cli/internal/display"
 	"github.com/alexgorbatchev/relay-jobs-cli/internal/job"
+	"github.com/jedib0t/go-pretty/v6/table"
+	"github.com/jedib0t/go-pretty/v6/text"
 	"github.com/spf13/cobra"
 )
 
@@ -114,22 +116,45 @@ func printWorkers(c *cobra.Command, workers []workerReceipt) error {
 		_, err := fmt.Fprintln(c.OutOrStdout(), "No workers configured.")
 		return err
 	}
-	for i, w := range workers {
-		var text strings.Builder
-		if i > 0 {
-			text.WriteByte('\n')
+	t := table.NewWriter()
+	t.SetStyle(table.StyleLight)
+	t.AppendHeader(table.Row{"Worker", "Protocol", "Slots", "Warm", "Missing tools", "Status"})
+	t.SetColumnConfigs([]table.ColumnConfig{
+		{Number: 1, WidthMax: 24},
+		{Number: 5, WidthMax: 24, WidthMaxEnforcer: text.WrapSoft},
+		{Number: 6, WidthMax: 48, WidthMaxEnforcer: text.WrapSoft},
+	})
+	for _, w := range workers {
+		protocol, slots, missing := "—", "—", "—"
+		if w.Health.Protocol != 0 {
+			protocol = fmt.Sprint(w.Health.Protocol)
 		}
-		fmt.Fprintf(&text, "Worker: %s\nProtocol: %d\n", w.Name, w.Health.Protocol)
-		fmt.Fprintf(&text, "Slots: %d\nBusy: %d\nWarm: %t\n", w.Health.Slots, w.Health.Busy, w.Health.Warm)
-		if len(w.Health.Missing) > 0 {
-			fmt.Fprintf(&text, "Missing tools: %s\n", strings.Join(w.Health.Missing, ", "))
+		if w.Error == "" && w.Health.Protocol == job.Protocol {
+			slots = fmt.Sprintf("%d/%d", w.Health.Busy, w.Health.Slots)
+			missing = strings.Join(w.Health.Missing, ", ")
 		}
+		status := workerStatus(w)
 		if w.Error != "" {
-			fmt.Fprintf(&text, "Error: %s\n", w.Error)
+			status += ": " + w.Error
 		}
-		if _, err := fmt.Fprint(c.OutOrStdout(), text.String()); err != nil {
-			return err
-		}
+		// Listing has no source checkout, so workspace warmth is not assessed.
+		t.AppendRow(table.Row{w.Name, protocol, slots, "—", missing, status})
 	}
-	return nil
+	_, err := fmt.Fprintln(c.OutOrStdout(), t.Render())
+	return err
+}
+
+func workerStatus(w workerReceipt) string {
+	switch {
+	case w.Health.Protocol != 0 && w.Health.Protocol != job.Protocol:
+		return "incompatible"
+	case w.Error != "":
+		return "unreachable"
+	case w.Health.Protocol == 0 || w.Health.Slots < 1 || len(w.Health.Missing) > 0:
+		return "unavailable"
+	case w.Health.Busy > 0:
+		return "working"
+	default:
+		return "ready"
+	}
 }

@@ -8,7 +8,7 @@ metadata:
   status: current
 ---
 
-Run batch commands in persistent Linux or macOS worker workspaces. Set `AGENT=1` for compact help, errors, and JSON receipts/listings. Human output uses labeled text. Human help follows terminal width or positive `COLUMNS`, with an 80-column fallback; agent help is untruncated. Output write failures and invalid commands exit nonzero. Displayed home paths use `~`; stored and subprocess paths stay absolute. Job stdout/stderr remain original bytes in both modes.
+Run batch commands in persistent Linux or macOS worker workspaces. Set `AGENT=1` for compact help, errors, and JSON receipts/listings. Human job receipts use labeled text; worker listings use tables. Human help follows terminal width or positive `COLUMNS`, with an 80-column fallback; agent help is untruncated. Output write failures and invalid commands exit nonzero. Displayed home paths use `~`; stored and subprocess paths stay absolute. Job stdout/stderr remain original bytes in both modes.
 
 ## `relay-jobs`
 
@@ -93,7 +93,7 @@ On macOS, commands and execution supervisors have separate native launchd jobs. 
 
 ## `relay-jobs worker list`
 
-Ask the coordinator for each configured worker's health, occupancy, protocol, and connection error. Print labeled worker entries in configuration order, or JSON with `AGENT=1`; inspect each entry's error. Probes run concurrently; unavailable workers are per-entry errors and do not fail the command. Coordinator/API failures exit nonzero. `--worker-timeout` overrides TOML for this request; the client allows two additional seconds to receive the response. Scheduling uses the running coordinator's settings. Checking health creates reusable SSH tunnels.
+Ask the coordinator for each configured worker's health, occupancy, protocol, and connection error. Print a table in configuration order with Worker, Protocol, Slots, Warm, Missing tools, and Status columns. Slots are occupied/total, such as `1/2`. Status is `ready` when idle, `working` when slots are occupied, `unreachable` when the health probe fails, `incompatible` for a protocol mismatch, or `unavailable` when health/capacity is absent or required tools are missing. Failed probes include their diagnostic in Status and show `—` for unknown health values. Warm is `—` because listing does not check a source workspace. Long worker names, missing-tool lists, and errors wrap within their cells. With `AGENT=1`, print JSON instead; inspect each entry's error. Empty human output is `No workers configured.`; empty agent output is `[]`. Probes run concurrently; unavailable workers are per-entry errors and do not fail the command. Coordinator/API failures exit nonzero. `--worker-timeout` overrides TOML for this request; the client allows two additional seconds to receive the response. Scheduling uses the running coordinator's settings. Checking health creates reusable SSH tunnels.
 
 | Flag | Type | Default | Purpose |
 | --- | --- | --- | --- |

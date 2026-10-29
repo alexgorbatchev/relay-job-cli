@@ -1,6 +1,6 @@
 ---
 created_on: 2026-10-25 05:51
-last_modified: 2026-10-28 14:11
+last_modified: 2026-10-28 15:49
 status: current
 ---
 
@@ -39,7 +39,7 @@ Generic Linux/macOS batch runner. Executable: `relay-jobs`.
 - Canonical usage skill: `skills/relay-jobs/SKILL.md`. `relay-jobs skill` prints its GitHub installation command and URL identically in both modes, offline. Never embed or duplicate the skill.
 - Update README, examples, usage skill and tests in the same change when commands, flags, defaults, TOML fields, output or side effects change. Update documentation timestamps.
 - Only config/socket are global; state/cache belong to serve/install commands and worker-timeout to coordinator serve, worker list, and coordinator installation. Reject irrelevant role-specific installation flags.
-- Human receipts/listings use labeled text; agent mode uses JSON. Job list reads coordinator receipts newest first, with ID tie-breaking. Receipt duration includes queueing, synchronization, and execution through terminal update or the current query.
+- Human job receipts use labeled text; worker listings use go-pretty tables with Status and occupied/total Slots. Unknown health and unassessed workspace warmth display as `—`. Agent mode uses JSON. Job list reads coordinator receipts newest first, with ID tie-breaking. Receipt duration includes queueing, synchronization, and execution through terminal update or the current query.
 - Preserve home-directory folding in displayed paths. Keep subprocess and stored paths absolute.
 
 ## Releases
