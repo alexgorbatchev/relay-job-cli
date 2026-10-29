@@ -122,8 +122,16 @@ func TestDarwinCancellationAndSupervisorLoss(t *testing.T) {
 					t.Fatalf("kill execution supervisor: %v: %s", err, out)
 				}
 				want = stateLost
-			} else if _, err := w.Cancel(context.Background(), r.ID); err != nil {
-				t.Fatal(err)
+			} else {
+				if _, err := w.Cancel(context.Background(), r.ID); err != nil {
+					t.Fatal(err)
+				}
+				// Cancellation returns only after the supervisor released the workspace.
+				guard, err := w.Store.WorkspaceLock(r.Source)
+				if err != nil {
+					t.Fatalf("workspace still held after cancellation: %v", err)
+				}
+				guard.Close()
 			}
 			final := darwinTerminal(t, w, r.ID)
 			if final.State != want {
@@ -131,5 +139,33 @@ func TestDarwinCancellationAndSupervisorLoss(t *testing.T) {
 			}
 			darwinChildGone(t, pid)
 		})
+	}
+}
+
+func TestDarwinStopAwaitsSupervisorExit(t *testing.T) {
+	s := Store{Dir: t.TempDir()}
+	id := NewID()
+	held, err := Lock(s.Path(id, "execution.lock"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	if _, err = stopExecution(ctx, s, id); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("stop ignored a running supervisor: %v", err)
+	}
+	released := make(chan error, 1)
+	go func() { released <- finishExecution(context.Background(), s, id) }()
+	time.Sleep(3 * PollInterval)
+	held.Close()
+	if err = <-released; err != nil {
+		t.Fatal(err)
+	}
+	broken := NewID()
+	if err = os.WriteFile(filepath.Join(s.Dir, "jobs", broken), nil, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = stopExecution(context.Background(), s, broken); err == nil || lockBusy(err) {
+		t.Fatalf("lock failure hidden: %v", err)
 	}
 }

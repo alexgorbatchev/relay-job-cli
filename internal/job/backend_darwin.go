@@ -38,11 +38,36 @@ func executionActive(ctx context.Context, _ Store, id string) (bool, error) {
 	return false, err
 }
 
-func stopExecution(ctx context.Context, _ Store, id string) ([]byte, error) {
+func stopExecution(ctx context.Context, s Store, id string) ([]byte, error) {
 	runnerOut, runnerErr := launchd.Stop(ctx, Unit(id))
 	// Stop the creator first so it cannot submit a command after cancellation's cleanup.
 	commandOut, commandErr := launchd.Stop(ctx, commandUnit(id))
-	return append(runnerOut, commandOut...), errors.Join(runnerErr, commandErr)
+	out := append(runnerOut, commandOut...)
+	if err := errors.Join(runnerErr, commandErr); err != nil {
+		return out, err
+	}
+	return out, awaitSupervisorExit(ctx, s, id)
+}
+
+// Bootout returns while the signaled supervisor may still hold the workspace.
+// Its execution lock is released only after the workspace lock and final receipt.
+func awaitSupervisorExit(ctx context.Context, s Store, id string) error {
+	ticker := time.NewTicker(PollInterval)
+	defer ticker.Stop()
+	for {
+		lock, err := Lock(s.Path(id, "execution.lock"))
+		if err == nil {
+			return lock.Close()
+		}
+		if !lockBusy(err) {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("execution supervisor still exiting: %w", ctx.Err())
+		case <-ticker.C:
+		}
+	}
 }
 
 func finishExecution(ctx context.Context, s Store, id string) error {

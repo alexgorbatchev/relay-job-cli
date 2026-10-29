@@ -16,6 +16,12 @@ func Execute(ctx context.Context, s Store, id string) error {
 	if !validID.MatchString(id) {
 		return fmt.Errorf("invalid job ID")
 	}
+	// Held until every other lock is released, so stopping can wait for full cleanup.
+	supervisor, err := Lock(s.Path(id, "execution.lock"))
+	if err != nil {
+		return err
+	}
+	defer supervisor.Close()
 	lock, err := recordLock(s.Path(id, "job.lock"))
 	if err != nil {
 		return err

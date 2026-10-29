@@ -4,7 +4,7 @@ description: Use when submitting remote commands, configuring workers, inspectin
 author: alexgorbatchev
 metadata:
   created_on: 2026-10-22 22:15
-  last_modified: 2026-10-28 14:11
+  last_modified: 2026-10-29 11:50
   status: current
 ---
 
@@ -157,7 +157,7 @@ Replay saved stdout/stderr from the beginning.
 
 ## `relay-jobs job cancel <id>`
 
-Cancel queued work or stop the worker's native execution jobs and their descendants. Print the resulting receipt. An unreachable worker makes cancellation unconfirmed; reconnect and retry with the same ID.
+Cancel queued work or stop the worker's native execution jobs and their descendants. Cancellation completes after the execution supervisor exits and releases the workspace. Print the resulting receipt. An unreachable worker makes cancellation unconfirmed; reconnect and retry with the same ID.
 
 ## `relay-jobs service`
 
