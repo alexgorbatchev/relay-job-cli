@@ -11,7 +11,7 @@ import (
 )
 
 func TestDispatchFailureBoundaries(t *testing.T) {
-	systemd(t)
+	nativeManager(t)
 	for _, mode := range []string{"reserve rejected", "sync rejected", "cleanup reply lost", "reserve connection lost", "local launch rejected"} {
 		t.Run(mode, func(t *testing.T) {
 			ctx := context.Background()
@@ -109,7 +109,7 @@ func TestSSHConfigurationNeverTriggersFallback(t *testing.T) {
 }
 
 func TestStateAndLockFaults(t *testing.T) {
-	systemd(t)
+	nativeManager(t)
 	ctx := context.Background()
 	w := worker(t, 1)
 	req := request(t, "true")

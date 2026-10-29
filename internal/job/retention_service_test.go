@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -15,9 +14,7 @@ import (
 )
 
 func TestRetentionLiveExecution(t *testing.T) {
-	if runtime.GOOS == "linux" {
-		systemd(t)
-	}
+	nativeManager(t)
 	w := worker(t, 1)
 	w.Retention = DefaultRetention()
 	req := request(t, "/bin/sh", "-c", "printf live; sleep 30")

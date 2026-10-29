@@ -15,13 +15,17 @@ import (
 	"github.com/alexgorbatchev/relay-jobs-cli/internal/launchd"
 )
 
-func darwinWorker(t *testing.T) *Worker {
+func nativeManager(t *testing.T) {
 	t.Helper()
 	if err := exec.Command("/bin/launchctl", "print", launchd.Domain()).Run(); err != nil {
 		t.Fatalf("native launchd user domain required: %v", err)
 	}
-	w := &Worker{Store: Store{Dir: t.TempDir()}, Cache: t.TempDir(), Binary: testBinary, Slots: 2}
-	return w
+}
+
+func darwinWorker(t *testing.T) *Worker {
+	t.Helper()
+	nativeManager(t)
+	return worker(t, 2)
 }
 
 func darwinPrepare(t *testing.T, w *Worker, script string) Record {

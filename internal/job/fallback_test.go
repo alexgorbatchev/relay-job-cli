@@ -7,7 +7,7 @@ import (
 )
 
 func TestLocalFallbackQueuesAndCancels(t *testing.T) {
-	systemd(t)
+	nativeManager(t)
 	ctx := context.Background()
 	c := NewCoordinator(Paths{State: t.TempDir()}, Config{Workers: []WorkerConfig{{Name: "offline", Socket: "/missing/relay-jobs.sock"}}}, testBinary)
 	defer c.Close()

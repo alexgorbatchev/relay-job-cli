@@ -13,7 +13,7 @@ import (
 )
 
 func TestLostStartReplyDoesNotReplay(t *testing.T) {
-	systemd(t)
+	nativeManager(t)
 	ctx := context.Background()
 	w := worker(t, 1)
 	fallback := worker(t, 1)
@@ -55,7 +55,7 @@ func TestLostStartReplyDoesNotReplay(t *testing.T) {
 }
 
 func TestQueueAndCancellationRecovery(t *testing.T) {
-	systemd(t)
+	nativeManager(t)
 	ctx := context.Background()
 	w := worker(t, 1)
 	socket := endpoint(t, w.Handler())
@@ -162,7 +162,7 @@ func TestPreparedRecoveryAndLease(t *testing.T) {
 		t.Fatal("abandoned reservation not released")
 	}
 	// A reservation that was persisted before a missing start request can resume only on that worker.
-	systemd(t)
+	nativeManager(t)
 	adopted := request(t, "printf", "adopted")
 	ready, err := w.Prepare(adopted)
 	if err != nil {

@@ -13,9 +13,7 @@ import (
 )
 
 func TestServeCommands(t *testing.T) {
-	if err := exec.Command("systemctl", "--user", "show-environment").Run(); err != nil {
-		t.Skip("requires user systemd")
-	}
+	requireNativeManager(t)
 	w := &job.Worker{Store: job.Store{Dir: t.TempDir()}, Cache: t.TempDir(), Binary: integrationBinary, Slots: 1}
 	workerSocket := socketServer(t, w.Handler())
 	config := filepath.Join(t.TempDir(), "relay-jobs.toml")

@@ -13,7 +13,7 @@ Generic Linux/macOS batch runner. Executable: `relay-jobs`.
 - Use Go 1.27.3+, OpenSSH, rsync 3.0.0+ and just. On macOS install Homebrew `rsync`; the bundled openrsync lacks `--protect-args`. `just setup` downloads module dependencies; it does not install system packages.
 - `just build` writes `bin/relay-jobs`; `just run` and `just run-ai` invoke the CLI.
 - `just check` runs module hygiene, vet and race-enabled tests, enforcing 90% combined statement coverage. Change behavioral tests whenever behavior changes. Use real temporary files, sockets and native supervisors.
-- Linux lifecycle tests require an active systemd user manager. macOS native tests require the launchd user domain. CI verifies the Linux manager before testing. Permission tests skip when running as root.
+- Linux lifecycle tests require an active systemd user manager. macOS native tests require the launchd user domain. Gate backend-agnostic integration tests on the native manager (systemd on Linux, launchd on macOS), not on systemd alone. Keep platform-only code and tests in `_linux`/`_darwin` files so `just check` meets 90% coverage on both platforms. CI verifies the Linux manager before testing. Permission tests skip when running as root.
 - Real SSH tests use `RELAY_JOBS_SSH_TEST_HOST` and `RELAY_JOBS_SSH_TEST_SOCKET`; point them at an isolated matching worker. Cross-compiled tests accept `RELAY_JOBS_TEST_BINARY`.
 
 ## Contracts
