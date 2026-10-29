@@ -42,7 +42,25 @@ var validName = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
 
 type Paths struct{ State, Cache, Socket, Config string }
 
-func DefaultPaths() Paths {
+// Role selects the service a daemon runs. Each role has its own default state
+// and cache directories and socket, so a coordinator and a worker on one
+// machine never share daemon state.
+type Role string
+
+const (
+	CoordinatorRole Role = "coordinator"
+	WorkerRole      Role = "worker"
+)
+
+// Socket is the role's socket path inside a state directory.
+func (r Role) Socket(state string) string {
+	return filepath.Join(state, string(r)+".sock")
+}
+
+// DefaultPaths resolves a role's XDG-based defaults. Unset or empty
+// XDG_CONFIG_HOME, XDG_STATE_HOME and XDG_CACHE_HOME fall back to ~/.config,
+// ~/.local/state and ~/.cache. Workers use relay-jobs-worker directories.
+func DefaultPaths(role Role) Paths {
 	home, _ := os.UserHomeDir() // os.UserConfigDir reports a missing home when used by callers.
 	dir := func(env, fallback string) string {
 		if s := os.Getenv(env); s != "" {
@@ -50,8 +68,12 @@ func DefaultPaths() Paths {
 		}
 		return filepath.Join(home, fallback)
 	}
-	state := filepath.Join(dir("XDG_STATE_HOME", ".local/state"), "relay-jobs")
-	return Paths{State: state, Cache: filepath.Join(dir("XDG_CACHE_HOME", ".cache"), "relay-jobs"), Socket: filepath.Join(state, "coordinator.sock"), Config: filepath.Join(dir("XDG_CONFIG_HOME", ".config"), "relay-jobs/relay-jobs.toml")}
+	name := "relay-jobs"
+	if role == WorkerRole {
+		name += "-worker"
+	}
+	state := filepath.Join(dir("XDG_STATE_HOME", ".local/state"), name)
+	return Paths{State: state, Cache: filepath.Join(dir("XDG_CACHE_HOME", ".cache"), name), Socket: role.Socket(state), Config: filepath.Join(dir("XDG_CONFIG_HOME", ".config"), "relay-jobs/relay-jobs.toml")}
 }
 
 type WorkerConfig struct {

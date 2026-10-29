@@ -177,7 +177,7 @@ func TestTOMLErrorsAndRoleDefaults(t *testing.T) {
 			t.Fatal(err)
 		}
 		cmd.Flags().Lookup("config").Changed = false
-		o := &options{paths: job.DefaultPaths()}
+		o := &options{}
 		o.paths.Config = path + ".missing"
 		if err := o.configure(cmd); err != nil {
 			t.Fatal(err)

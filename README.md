@@ -135,18 +135,36 @@ Global flags:
 | Flag | Short | Default | Description |
 | :--- | :--- | :--- | :--- |
 | `--config <path>` | — | `~/.config/relay-jobs/relay-jobs.toml` | Strict TOML user config; honors XDG_CONFIG_HOME |
-| `--socket <path>` | — | `<effective-state>/coordinator.sock` | Worker default is `<effective-state>/worker.sock` |
+| `--socket <path>` | — | `<effective-state>/coordinator.sock` | `[paths] socket` when set; worker default is `<effective-state>/worker.sock` |
 | `--help` | `-h` | `false` | Command help |
 | `--version` | `-v` | `false` | Raw version and newline |
 
-CLI flags override TOML. Missing default configuration is optional for commands that do not need a worker list; an explicitly selected missing file fails. Unknown TOML keys fail. Relative TOML paths resolve from the configuration file and expand a leading `~`; CLI paths resolve from the caller's directory.
+Environment variables:
+
+| Variable | Effect |
+| :--- | :--- |
+| `AGENT` | `1`, `true`, or `yes` selects agent mode |
+| `COLUMNS` | Positive human help width; otherwise the terminal width, or 80 columns |
+| `HOME` | Base of XDG fallbacks and leading `~` in TOML paths; folded to `~` in output |
+| `XDG_CONFIG_HOME` | Base of the default config (`~/.config`) and of `service install` units |
+| `XDG_STATE_HOME` | Base of the default state directories and sockets (`~/.local/state`) |
+| `XDG_CACHE_HOME` | Base of the default workspace caches (`~/.cache`) |
+| `XDG_DATA_HOME` | Base of `relay-jobs/bin`, holding managed rsync and the installed service binary (`~/.local/share`) |
+| `PATH` | Tools and commands for serve commands and execution units; captured by `service install` |
+| `XDG_RUNTIME_DIR`, `TMPDIR` | Coordinator SSH connection sockets, falling back to `TMPDIR`, then `/tmp` |
+
+Help lists each command's variables. Jobs never inherit the client's environment; pass `--env`.
+
+CLI flags override TOML, and help names the TOML key that supplies each default. Missing default configuration is optional for commands that do not need a worker list; an explicitly selected missing file fails. Unknown TOML keys fail. Relative TOML paths resolve from the configuration file and expand a leading `~`; CLI paths resolve from the caller's directory.
 
 `relay-jobs worker serve`, `relay-jobs coordinator serve`, and `relay-jobs service install`:
 
 | Flag | Short | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `--state <path>` | — | `~/.local/state/relay-jobs` | Durable state; worker default is `relay-jobs-worker` |
-| `--cache <path>` | — | `~/.cache/relay-jobs` | Workspace cache; worker default is `relay-jobs-worker` |
+| `--state <path>` | — | `~/.local/state/relay-jobs` | Durable state; `[paths] state` when set; worker default is `~/.local/state/relay-jobs-worker` |
+| `--cache <path>` | — | `~/.cache/relay-jobs` | Workspace cache; `[paths] cache` when set; worker default is `~/.cache/relay-jobs-worker` |
+
+`worker serve` shows the worker directories as its defaults. `service install` chooses by `--role`, so its help names both.
 
 `relay-jobs worker list`, `relay-jobs coordinator serve`, and `relay-jobs service install --role coordinator`:
 

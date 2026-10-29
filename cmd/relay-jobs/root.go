@@ -29,7 +29,7 @@ type exitError int
 func (e exitError) Error() string { return fmt.Sprintf("job exited %d", int(e)) }
 
 func newRootCommand() *cobra.Command {
-	o := &options{paths: job.DefaultPaths(), workerTimeout: job.WorkerTimeout}
+	o := &options{paths: job.DefaultPaths(job.CoordinatorRole), workerTimeout: job.WorkerTimeout}
 	root := &cobra.Command{Use: "relay-jobs", Short: "Run commands in persistent remote workspaces", Version: version, SilenceUsage: true, SilenceErrors: true, Args: cobra.NoArgs, RunE: func(c *cobra.Command, _ []string) error { return c.Help() }}
 	root.SetVersionTemplate("{{.Version}}\n")
 	root.PersistentPreRunE = func(c *cobra.Command, _ []string) error {
@@ -39,7 +39,7 @@ func newRootCommand() *cobra.Command {
 		return o.configure(c)
 	}
 	root.PersistentFlags().StringVar(&o.paths.Config, "config", o.paths.Config, "User configuration file")
-	root.PersistentFlags().StringVar(&o.paths.Socket, "socket", o.paths.Socket, "Coordinator or worker socket")
+	o.socketFlag(root)
 	jobs := commandGroup("job", "Run and inspect jobs")
 	jobs.AddCommand(o.runCommand(false), o.runCommand(true), o.listCommand(), o.statusCommand(), o.logsCommand(), o.cancelCommand())
 	worker := commandGroup("worker", "Manage workers")
@@ -64,8 +64,8 @@ func newRootCommand() *cobra.Command {
 		return job.ServeWorker(c.Context(), o.paths.Socket, w)
 	}}
 	workerRetention = retentionFlags(serveWorker)
-	o.daemonFlags(serveWorker)
-	serveWorker.Flags().IntVar(&slots, "slots", 1, "Maximum concurrent jobs")
+	o.daemonFlags(serveWorker, job.WorkerRole)
+	serveWorker.Flags().IntVar(&slots, "slots", 1, "Maximum concurrent jobs; default from [worker] slots when set")
 	listWorkers := &cobra.Command{Use: "list", Short: "Check configured workers", Args: cobra.NoArgs, RunE: func(c *cobra.Command, _ []string) error {
 		rpc := job.NewRPC(o.paths.Socket)
 		defer rpc.Close()
@@ -102,7 +102,7 @@ func newRootCommand() *cobra.Command {
 		return job.ServeCoordinator(c.Context(), o.paths.Socket, s)
 	}}
 	coordinatorRetention = retentionFlags(serveCoordinator)
-	o.daemonFlags(serveCoordinator)
+	o.daemonFlags(serveCoordinator, job.CoordinatorRole)
 	o.timeoutFlag(serveCoordinator)
 	coordinator.AddCommand(serveCoordinator)
 	execution := &cobra.Command{Use: "execution", Hidden: true, Args: cobra.NoArgs}
@@ -111,7 +111,7 @@ func newRootCommand() *cobra.Command {
 		return job.Execute(c.Context(), job.Store{Dir: o.paths.State}, id)
 	}}
 	execute.Flags().StringVar(&id, "id", "", "Execution ID")
-	o.daemonFlags(execute)
+	o.daemonFlags(execute, job.CoordinatorRole)
 	execution.AddCommand(execute)
 	syncGroup := &cobra.Command{Use: "sync", Hidden: true, Args: cobra.NoArgs}
 	var syncID string
@@ -119,7 +119,7 @@ func newRootCommand() *cobra.Command {
 		return job.SyncReceive(c.Context(), job.Store{Dir: o.paths.State}, syncID, args, c.InOrStdin(), c.OutOrStdout(), c.ErrOrStderr())
 	}}
 	receive.Flags().StringVar(&syncID, "id", "", "Reservation ID")
-	o.daemonFlags(receive)
+	o.daemonFlags(receive, job.CoordinatorRole)
 	syncGroup.AddCommand(receive)
 	root.AddCommand(jobs, worker, coordinator, execution, syncGroup, o.serviceCommand())
 	var foldDefaults func(*cobra.Command)
@@ -133,8 +133,8 @@ func newRootCommand() *cobra.Command {
 	setupHelp(root)
 	return root
 }
-func (o *options) absolutePaths() error {
-	for _, p := range []*string{&o.paths.Config, &o.paths.State, &o.paths.Cache, &o.paths.Socket} {
+func absolutePaths(paths ...*string) error {
+	for _, p := range paths {
 		if *p == "" {
 			return fmt.Errorf("service paths must be nonempty")
 		}
@@ -234,7 +234,11 @@ func (o *options) runCommand(named bool) *cobra.Command {
 		c.Flags().StringVar(&project, "project", "relay-jobs.toml", "Project job file relative to source")
 	}
 	c.Flags().StringVar(&id, "id", "", "Use a previously generated job ID")
-	c.Flags().StringVar(&policy, "unavailable", "fail", "No reachable worker: fail or local")
+	unavailable := "No reachable worker: fail or local"
+	if named {
+		unavailable += "; default from the job's unavailable field when set"
+	}
+	c.Flags().StringVar(&policy, "unavailable", "fail", unavailable)
 	c.Flags().BoolVar(&detached, "detach", false, "Submit without following output")
 	c.Flags().BoolVar(&quiet, "quiet", false, "Keep stderr free of the job ID prefix")
 	c.Flags().StringSliceVar(&workers, "workers", nil, "Eligible worker names")

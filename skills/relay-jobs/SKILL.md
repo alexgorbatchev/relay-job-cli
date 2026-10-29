@@ -4,7 +4,7 @@ description: Use when submitting remote commands, configuring workers, inspectin
 author: alexgorbatchev
 metadata:
   created_on: 2026-10-22 22:15
-  last_modified: 2026-10-29 12:55
+  last_modified: 2026-10-29 15:31
   status: current
 ---
 
@@ -17,11 +17,26 @@ Invoke without arguments for help. Global flags apply to every command:
 | Flag | Type | Default | Purpose |
 | --- | --- | --- | --- |
 | `--config` | string | `~/.config/relay-jobs/relay-jobs.toml` | User configuration; `$XDG_CONFIG_HOME/relay-jobs/relay-jobs.toml` when `XDG_CONFIG_HOME` is set. |
-| `--socket` | string | `~/.local/state/relay-jobs/coordinator.sock` | Help shows the coordinator default; the effective default is `coordinator.sock` in the effective state directory, or `worker.sock` for workers. |
+| `--socket` | string | empty: role socket | `[paths] socket` when set, else `coordinator.sock` in the effective state directory, or `worker.sock` for `worker serve` and `service install --role worker`. Without overrides: `~/.local/state/relay-jobs/coordinator.sock` or `~/.local/state/relay-jobs-worker/worker.sock`. |
 | `--help` | bool | false | Print command help; `-h`. |
 | `--version` | bool | false | Print raw version and newline; `-v`. |
 
-CLI flags override strict TOML user settings. Missing default configuration is optional except the coordinator needs workers; an explicitly selected missing config fails. Relative `[paths]` values resolve beside the config file and expand a leading `~`. CLI paths resolve from the caller's directory. The socket default follows effective state; worker serve and worker service install use separate `relay-jobs-worker` state/cache directories and `worker.sock`. Explicit paths override these defaults; keep different instances separate. Unix socket paths must fit the OS limit. Commands use current-user permissions without interactive stdin or TTY.
+CLI flags override strict TOML user settings. Help names the TOML key that supplies each flag's default. Missing default configuration is optional except the coordinator needs workers; an explicitly selected missing config fails. Relative `[paths]` values resolve beside the config file and expand a leading `~`. CLI paths resolve from the caller's directory. The socket default follows effective state; worker serve and worker service install use separate `relay-jobs-worker` state/cache directories and `worker.sock`. Explicit paths override these defaults; keep different instances separate. Unix socket paths must fit the OS limit. Commands use current-user permissions without interactive stdin or TTY.
+
+Environment variables. Empty XDG values count as unset. Job commands never forward the client's environment; pass `--env`.
+
+| Variable | Read by | Effect |
+| --- | --- | --- |
+| `AGENT` | every command | `1`, `true`, or `yes`, ignoring case and surrounding space, selects agent mode: compact help with the skill alert, JSON receipts and listings, `ERR:` diagnostics, and untimed logs. |
+| `COLUMNS` | every command | Positive integer width for human help; otherwise the terminal width, or 80 columns when redirected. |
+| `HOME` | every command | Base of the XDG fallbacks below and of a leading `~` in TOML paths; displayed paths fold it to `~`. macOS native execution jobs receive it. |
+| `XDG_CONFIG_HOME` | every command, `service install` | Base of the `--config` default, `relay-jobs/relay-jobs.toml` (`~/.config` when unset); `service install` writes units to its `systemd/user`. |
+| `XDG_STATE_HOME` | every command | Base of the state default (`~/.local/state` when unset): `relay-jobs` for the coordinator and clients, `relay-jobs-worker` for workers. The default socket lives there. |
+| `XDG_CACHE_HOME` | serve commands, `service install` | Base of the `--cache` default (`~/.cache` when unset): `relay-jobs` or `relay-jobs-worker`. |
+| `XDG_DATA_HOME` | serve commands, `service install` | Base of `relay-jobs/bin` (`~/.local/share` when unset): the managed rsync directory serve commands prepend to PATH, and the `service install` binary location. |
+| `PATH` | serve commands, `service install` | Serve commands find `ssh`, rsync, native manager tools, and `--requires` executables on it after the managed directory; execution units receive it, and commands resolve against it unless the job sets `PATH`. `service install` finds `systemctl` on it and captures it in the unit. |
+| `XDG_RUNTIME_DIR` | `coordinator serve` | Directory for SSH connection sockets; `TMPDIR` when unset. |
+| `TMPDIR` | `coordinator serve` | SSH connection socket directory when `XDG_RUNTIME_DIR` is unset; `/tmp` when unset. |
 
 ## `relay-jobs coordinator`
 
@@ -29,7 +44,7 @@ Manage the primary machine's coordinator.
 
 ## `relay-jobs coordinator serve`
 
-Read the worker config and serve until SIGINT/SIGTERM/SIGHUP. Recover durable jobs by their existing IDs. Requires `ssh`, rsync 3.0.0 or newer, and the OS's native manager for local fallback. macOS's bundled openrsync is too old; use Homebrew's `rsync`.
+Read the worker config and serve until SIGINT/SIGTERM/SIGHUP. SSH connection sockets go under `XDG_RUNTIME_DIR`, else `TMPDIR`, else `/tmp`. Recover durable jobs by their existing IDs. Requires `ssh`, rsync 3.0.0 or newer, and the OS's native manager for local fallback. macOS's bundled openrsync is too old; use Homebrew's `rsync`.
 
 Before serving, `coordinator serve` and `worker serve` prepend `$XDG_DATA_HOME/relay-jobs/bin` (default `~/.local/share/relay-jobs/bin`) to PATH and check rsync. An interactive terminal offers a `[y/N]` installation through Homebrew, apt-get, pacman, or dnf; declining, closed stdin, services, and `AGENT=1` exit 1 with the detected version. `AGENT` values `1`, `true`, and `yes` select agent mode. Workers record the absolute path of the verified rsync in each reservation, and the SSH sync receiver runs that executable regardless of the SSH command PATH.
 
@@ -49,18 +64,13 @@ Use SSH aliases with preconfigured keys and trusted host keys. An omitted `host`
 
 For mixed operating systems, specify `--workers` or `--labels` on platform-dependent jobs. Without either filter, any configured worker is eligible. Exclude host-built dependencies and caches before synchronizing to another OS.
 
-The following local flags apply to `coordinator serve`, `worker serve`, and `service install`, not client commands:
+`--state` and `--cache` are local to `coordinator serve`, `worker serve`, and `service install`, not client commands. `coordinator serve` accepts:
 
 | Flag | Type | Default | Purpose |
 | --- | --- | --- | --- |
-| `--state` | string | `~/.local/state/relay-jobs` | Durable records; `$XDG_STATE_HOME/relay-jobs` when `XDG_STATE_HOME` is set. Workers default to `relay-jobs-worker` in the same base. |
-| `--cache` | string | `~/.cache/relay-jobs` | Workspaces; `$XDG_CACHE_HOME/relay-jobs` when `XDG_CACHE_HOME` is set. Workers default to `relay-jobs-worker` in the same base. |
-
-`coordinator serve` also accepts:
-
-| Flag | Type | Default | Purpose |
-| --- | --- | --- | --- |
-| `--worker-timeout` | duration | 1s | Positive coordinator availability budget, including SSH setup and health response. |
+| `--state` | string | `~/.local/state/relay-jobs` | Durable records; `[paths] state` when set, else `$XDG_STATE_HOME/relay-jobs`. |
+| `--cache` | string | `~/.cache/relay-jobs` | `[paths] cache` when set, else `$XDG_CACHE_HOME/relay-jobs`. The coordinator does not use it: local fallback runs in the original source checkout. |
+| `--worker-timeout` | duration | 1s | Positive coordinator availability budget, including SSH setup and health response; `[coordinator] worker_timeout` when set. |
 
 Configure automatic cleanup on `coordinator serve`, `worker serve`, or `service install`:
 
@@ -84,9 +94,9 @@ On macOS, commands and execution supervisors have separate native launchd jobs. 
 
 | Flag | Type | Default | Purpose |
 | --- | --- | --- | --- |
-| `--state` | string | `~/.local/state/relay-jobs` | Durable records; `$XDG_STATE_HOME/relay-jobs` when `XDG_STATE_HOME` is set. Workers default to `relay-jobs-worker` in the same base. |
-| `--cache` | string | `~/.cache/relay-jobs` | Workspaces; `$XDG_CACHE_HOME/relay-jobs` when `XDG_CACHE_HOME` is set. Workers default to `relay-jobs-worker` in the same base. |
-| `--slots` | int | 1 | Positive simultaneous reservation/execution limit. |
+| `--state` | string | `~/.local/state/relay-jobs-worker` | Durable records; `[paths] state` when set, else `$XDG_STATE_HOME/relay-jobs-worker`. |
+| `--cache` | string | `~/.cache/relay-jobs-worker` | Workspaces; `[paths] cache` when set, else `$XDG_CACHE_HOME/relay-jobs-worker`. |
+| `--slots` | int | 1 | Positive simultaneous reservation/execution limit; `[worker] slots` when set. |
 | `--log-retention` | duration | 168h0m0s | Expire completed logs after seven days; 0 disables expiry. |
 | `--workspace-retention` | duration | 720h0m0s | Delete tracked workspaces after thirty idle days; 0 disables expiry. |
 | `--cleanup-interval` | duration | 1h0m0s | Positive interval; also clean at startup. |
@@ -111,7 +121,7 @@ Submit literal executable arguments after `--`. Generate an ID before submission
 | --- | --- | --- | --- |
 | `--source` | string | . | Source directory, including dirty and untracked files. |
 | `--id` | string | empty | Reconcile/reuse a generated 32-character lowercase hex ID with the same request. |
-| `--unavailable` | string | fail | `fail` or explicit `local` fallback before execution submission. |
+| `--unavailable` | string | fail | `fail` or explicit `local` fallback before execution submission; for `job run`, the job's `unavailable` field when set. |
 | `--detach` | bool | false | Submit and print a receipt without following; JSON in agent mode. |
 | `--quiet` | bool | false | Omit the job ID prefix from stderr; use `--id` when retaining an ID is necessary. |
 | `--workers` | stringSlice | [] | Comma-separated eligible worker names. |
@@ -173,8 +183,8 @@ On Linux, copy the running binary into `$XDG_DATA_HOME/relay-jobs/bin/relay-jobs
 
 | Flag | Type | Default | Purpose |
 | --- | --- | --- | --- |
-| `--state` | string | `~/.local/state/relay-jobs` | Durable records; `$XDG_STATE_HOME/relay-jobs` when `XDG_STATE_HOME` is set. Workers default to `relay-jobs-worker` in the same base. |
-| `--cache` | string | `~/.cache/relay-jobs` | Workspaces; `$XDG_CACHE_HOME/relay-jobs` when `XDG_CACHE_HOME` is set. Workers default to `relay-jobs-worker` in the same base. |
+| `--state` | string | empty: role directory | `[paths] state` when set, else `~/.local/state/relay-jobs` (`$XDG_STATE_HOME/relay-jobs`), or `~/.local/state/relay-jobs-worker` for `--role worker`. Persisted only when explicit. |
+| `--cache` | string | empty: role directory | `[paths] cache` when set, else `~/.cache/relay-jobs` (`$XDG_CACHE_HOME/relay-jobs`), or `~/.cache/relay-jobs-worker` for `--role worker`. Persisted only when explicit. |
 | `--worker-timeout` | duration | 1s | Coordinator role only; positive availability budget, including SSH setup and health response. |
 | `--role` | string | empty | Required: coordinator or worker. |
 | `--slots` | int | 1 | Positive worker concurrency limit; worker role only. |

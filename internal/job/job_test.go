@@ -184,9 +184,13 @@ func TestValidationAndStore(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	t.Setenv("XDG_CACHE_HOME", t.TempDir())
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	p := DefaultPaths()
-	if !strings.HasPrefix(p.State, os.Getenv("XDG_STATE_HOME")) {
-		t.Fatal(p)
+	for _, role := range []Role{CoordinatorRole, WorkerRole} {
+		p := DefaultPaths(role)
+		for base, path := range map[string]string{"XDG_STATE_HOME": p.State, "XDG_CACHE_HOME": p.Cache, "XDG_CONFIG_HOME": p.Config} {
+			if !strings.HasPrefix(path, os.Getenv(base)+string(filepath.Separator)) {
+				t.Fatalf("%s path %s ignores %s", role, path, base)
+			}
+		}
 	}
 }
 func WorkspaceConfig(t *testing.T, c Config) (Config, error) {

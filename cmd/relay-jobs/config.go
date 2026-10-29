@@ -3,18 +3,57 @@ package main
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"github.com/alexgorbatchev/relay-jobs-cli/internal/job"
 	"github.com/spf13/cobra"
 )
 
+// role is the service whose defaults a command resolves: worker serve and
+// service install --role worker serve a worker; every other command, clients
+// included, uses the coordinator's.
+func role(c *cobra.Command) (job.Role, error) {
+	switch c.CommandPath() {
+	case "relay-jobs worker serve":
+		return job.WorkerRole, nil
+	case "relay-jobs service install":
+		role, err := c.Flags().GetString("role")
+		if err != nil || role != string(job.WorkerRole) {
+			return job.CoordinatorRole, err
+		}
+		return job.WorkerRole, nil
+	}
+	return job.CoordinatorRole, nil
+}
+
+// configure resolves the command's settings: explicit flags first, then TOML,
+// then the role's defaults. Help states the same order.
 func (o *options) configure(c *cobra.Command) error {
 	o.explicit = map[string]bool{}
 	for _, name := range []string{"state", "cache", "socket", "slots", "worker-timeout", "log-retention", "workspace-retention", "cleanup-interval"} {
 		o.explicit[name] = c.Flags().Changed(name)
 	}
-	if err := o.absolutePaths(); err != nil {
+	role, err := role(c)
+	if err != nil {
+		return err
+	}
+	defaults := job.DefaultPaths(role)
+	// Every command binds the same options, so a bound default can belong to
+	// another command; unset paths are always resolved here.
+	for _, p := range []struct {
+		name, value string
+		target      *string
+	}{
+		{"state", defaults.State, &o.paths.State}, {"cache", defaults.Cache, &o.paths.Cache},
+	} {
+		if !c.Flags().Changed(p.name) {
+			*p.target = p.value
+		}
+	}
+	paths := []*string{&o.paths.Config, &o.paths.State, &o.paths.Cache}
+	if c.Flags().Changed("socket") {
+		paths = append(paths, &o.paths.Socket)
+	}
+	if err := absolutePaths(paths...); err != nil {
 		return err
 	}
 	config, err := job.ReadConfig(o.paths.Config)
@@ -32,22 +71,6 @@ func (o *options) configure(c *cobra.Command) error {
 		return fmt.Errorf("worker-timeout must be positive")
 	}
 	o.config.Coordinator.WorkerTimeout = new(o.workerTimeout.String())
-	workerRole := c.CommandPath() == "relay-jobs worker serve"
-	if c.CommandPath() == "relay-jobs service install" {
-		role, err := c.Flags().GetString("role")
-		if err != nil {
-			return err
-		}
-		workerRole = role == "worker"
-	}
-	if workerRole {
-		if !c.Flags().Changed("state") {
-			o.paths.State += "-worker"
-		}
-		if !c.Flags().Changed("cache") {
-			o.paths.Cache += "-worker"
-		}
-	}
 	for _, p := range []struct {
 		name, value string
 		target      *string
@@ -62,11 +85,7 @@ func (o *options) configure(c *cobra.Command) error {
 		}
 	}
 	if !c.Flags().Changed("socket") {
-		name := "coordinator.sock"
-		if workerRole {
-			name = "worker.sock"
-		}
-		o.paths.Socket = filepath.Join(o.paths.State, name)
+		o.paths.Socket = role.Socket(o.paths.State)
 		if config.Paths.Socket != "" {
 			o.paths.Socket, err = job.ResolveConfigPath(config.Paths.Socket, o.paths.Config)
 			if err != nil {

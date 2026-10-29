@@ -70,8 +70,17 @@ func TestStorageFailuresRemainVisible(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", "")
 	t.Setenv("XDG_STATE_HOME", "")
 	t.Setenv("XDG_CACHE_HOME", "")
-	if !strings.Contains(DefaultPaths().State, ".local/state/relay-jobs") {
-		t.Fatal("default path resolution")
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for role, name := range map[Role]string{CoordinatorRole: "relay-jobs", WorkerRole: "relay-jobs-worker"} {
+		p := DefaultPaths(role)
+		want := Paths{State: filepath.Join(home, ".local/state", name), Cache: filepath.Join(home, ".cache", name), Config: filepath.Join(home, ".config/relay-jobs/relay-jobs.toml")}
+		want.Socket = filepath.Join(want.State, string(role)+".sock")
+		if p != want {
+			t.Fatalf("%s default paths %+v, want %+v", role, p, want)
+		}
 	}
 }
 

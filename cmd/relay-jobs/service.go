@@ -32,10 +32,10 @@ func (o *options) serviceCommand() *cobra.Command {
 		return o.installService(c, role, slots, name, binary, retention)
 	}}
 	retention = retentionFlags(install)
-	o.daemonFlags(install)
+	o.installPathFlags(install)
 	o.timeoutFlag(install)
 	install.Flags().StringVar(&role, "role", "", "Service role: coordinator or worker")
-	install.Flags().IntVar(&slots, "slots", 1, "Maximum concurrent worker jobs")
+	install.Flags().IntVar(&slots, "slots", 1, "Maximum concurrent worker jobs; default from [worker] slots when set")
 	install.Flags().StringVar(&name, "name", "", "Unit name, default relay-jobs-<role>.service")
 	install.Flags().StringVar(&binary, "binary", "", "Binary to install, default current executable")
 	group.AddCommand(install)
