@@ -29,7 +29,11 @@ Manage the primary machine's coordinator.
 
 ## `relay-jobs coordinator serve`
 
-Read the worker config and serve until SIGINT/SIGTERM/SIGHUP. Recover durable jobs by their existing IDs. Requires `ssh`, `rsync`, and the OS's native manager for local fallback. Worker configuration:
+Read the worker config and serve until SIGINT/SIGTERM/SIGHUP. Recover durable jobs by their existing IDs. Requires `ssh`, rsync 3.0.0 or newer, and the OS's native manager for local fallback. macOS's bundled openrsync is too old; use Homebrew's `rsync`.
+
+Before serving, `coordinator serve` and `worker serve` prepend `$XDG_DATA_HOME/relay-jobs/bin` (default `~/.local/share/relay-jobs/bin`) to PATH and check rsync. An interactive terminal offers a `[y/N]` installation through Homebrew, apt-get, pacman, or dnf; declining, closed stdin, services, and `AGENT=1` exit 1 with the detected version. The SSH sync receiver checks the worker's non-interactive SSH command PATH without prompting.
+
+Worker configuration:
 
 ```toml
 [[workers]]
@@ -74,7 +78,7 @@ Manage worker agents.
 
 ## `relay-jobs worker serve`
 
-Serve a private worker API. Supply distinct `--socket`, `--state`, and `--cache` when hosting multiple agents on one machine. Linux requires `systemd-run`, `systemctl` and a running user manager. macOS requires native `launchctl`, `plutil` and a user domain. Both require rsync with protected-argument support and the job's toolchain. Install workspace dependencies from lockfiles or through a bootstrap job.
+Serve a private worker API. Supply distinct `--socket`, `--state`, and `--cache` when hosting multiple agents on one machine. Linux requires `systemd-run`, `systemctl` and a running user manager. macOS requires native `launchctl`, `plutil` and a user domain. Both require rsync 3.0.0 or newer, checked at startup as for `coordinator serve`, and the job's toolchain. Install workspace dependencies from lockfiles or through a bootstrap job.
 
 On macOS, commands and execution supervisors have separate native launchd jobs. Agent restarts preserve execution; supervisor loss stops the command and reports a lost receipt.
 

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/alexgorbatchev/relay-jobs-cli/internal/deps"
 	"github.com/alexgorbatchev/relay-jobs-cli/internal/display"
 	"github.com/alexgorbatchev/relay-jobs-cli/internal/job"
 	"github.com/spf13/cobra"
@@ -48,6 +49,9 @@ func newRootCommand() *cobra.Command {
 		if slots < 1 {
 			return fmt.Errorf("slots must be positive")
 		}
+		if err := deps.Ensure(c.Context(), c.InOrStdin(), c.ErrOrStderr()); err != nil {
+			return err
+		}
 		binary, err := os.Executable()
 		if err != nil {
 			return err
@@ -81,6 +85,9 @@ func newRootCommand() *cobra.Command {
 		if len(o.config.Workers) == 0 {
 			return fmt.Errorf("configure at least one worker in %s", o.paths.Config)
 		}
+		if err := deps.Ensure(c.Context(), c.InOrStdin(), c.ErrOrStderr()); err != nil {
+			return err
+		}
 		binary, err := os.Executable()
 		if err != nil {
 			return err
@@ -105,6 +112,10 @@ func newRootCommand() *cobra.Command {
 	syncGroup := &cobra.Command{Use: "sync", Hidden: true, Args: cobra.NoArgs}
 	var syncID string
 	receive := &cobra.Command{Use: "serve", Hidden: true, Args: cobra.MinimumNArgs(1), RunE: func(c *cobra.Command, args []string) error {
+		// Standard input carries the rsync protocol, so never prompt here.
+		if err := deps.Verify(c.Context()); err != nil {
+			return err
+		}
 		return job.SyncReceive(c.Context(), job.Store{Dir: o.paths.State}, syncID, args, c.InOrStdin(), c.OutOrStdout(), c.ErrOrStderr())
 	}}
 	receive.Flags().StringVar(&syncID, "id", "", "Reservation ID")

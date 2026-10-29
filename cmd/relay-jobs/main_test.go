@@ -27,6 +27,8 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		panic(err)
 	}
+	// Keep godeps' managed executable directory out of the real home.
+	os.Setenv("XDG_DATA_HOME", filepath.Join(dir, "data"))
 	integrationBinary = filepath.Join(dir, "relay-jobs")
 	cmd := exec.Command("go", "build", "-o", integrationBinary, ".")
 	cmd.Env = append(os.Environ(), "GOWORK=off")

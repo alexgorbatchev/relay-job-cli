@@ -4,6 +4,7 @@ go 1.27.3
 
 require (
 	github.com/alexgorbatchev/cobra-help-tree/v2 v2.0.1
+	github.com/alexgorbatchev/godeps v1.1.0
 	github.com/mattn/go-runewidth v0.0.30
 	github.com/pelletier/go-toml/v2 v2.4.3
 	github.com/spf13/cobra v1.10.2
@@ -12,6 +13,7 @@ require (
 
 require (
 	github.com/clipperhouse/uax29/v2 v2.2.0 // indirect
+	github.com/hashicorp/go-version v1.9.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/term v0.45.0 // indirect
