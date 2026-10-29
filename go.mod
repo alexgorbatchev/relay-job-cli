@@ -3,7 +3,7 @@ module github.com/alexgorbatchev/relay-jobs-cli
 go 1.27.3
 
 require (
-	github.com/alexgorbatchev/cobra-help-tree/v2 v2.0.1
+	github.com/alexgorbatchev/cobra-help-tree/v3 v3.0.0
 	github.com/alexgorbatchev/godeps v1.1.1
 	github.com/jedib0t/go-pretty/v6 v6.8.3
 	github.com/mattn/go-runewidth v0.0.30

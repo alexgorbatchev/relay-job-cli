@@ -1,6 +1,6 @@
 ---
 created_on: 2026-10-25 05:51
-last_modified: 2026-10-28 15:49
+last_modified: 2026-10-29 12:55
 status: current
 ---
 
@@ -35,9 +35,9 @@ Generic Linux/macOS batch runner. Executable: `relay-jobs`.
 
 ## CLI and documentation
 
-- Use Cobra with cobra-help-tree, positional-argument metadata, bounded human help, compact agent help, and raw `--version` output.
-- Canonical usage skill: `skills/relay-jobs/SKILL.md`. `relay-jobs skill` prints its GitHub installation command and URL identically in both modes, offline. Never embed or duplicate the skill.
-- Update README, examples, usage skill and tests in the same change when commands, flags, defaults, TOML fields, output or side effects change. Update documentation timestamps.
+- Use Cobra with `github.com/alexgorbatchev/cobra-help-tree/v3`, positional-argument metadata, human help clipped to the terminal width (80-column fallback), compact agent help, and raw `--version` output.
+- Canonical usage skill: `skills/relay-jobs/SKILL.md`. `HelpOptions.Skill` (`skillSource` in `cmd/relay-jobs/help.go`) makes cobra-help-tree add the `skill` command, which prints the GitHub installation command and URL identically in both modes, offline, and opens every agent help screen with the skill alert; cobra-help-tree detects agent mode for help screens itself. Do not hand-roll the skill command or alert. Never embed or duplicate the skill.
+- Update the usage skill in the same change as any command, argument, flag, default, environment variable, TOML field, output, or side-effect change; `cobrahelptree.SkillOmissions` tests fail on undocumented commands, flags, types, and defaults. Update README, examples and tests in the same change too, and update documentation timestamps.
 - Only config/socket are global; state/cache belong to serve/install commands and worker-timeout to coordinator serve, worker list, and coordinator installation. Reject irrelevant role-specific installation flags.
 - Human job receipts use labeled text; worker listings use go-pretty tables with Status and occupied/total Slots. Unknown health and unassessed workspace warmth display as `—`. Agent mode uses JSON. Job list reads coordinator receipts newest first, with ID tie-breaking. Receipt duration includes queueing, synchronization, and execution through terminal update or the current query.
 - Preserve home-directory folding in displayed paths. Keep subprocess and stored paths absolute.

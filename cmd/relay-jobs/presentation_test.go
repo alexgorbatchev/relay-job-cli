@@ -69,7 +69,7 @@ func TestHelpWidthAndFailedWrites(t *testing.T) {
 					t.Fatal(code, stderr)
 				}
 				if mode == "0" {
-					width := humanHelpOptions().TerminalWidth
+					width := humanHelpWidth()
 					for _, line := range strings.Split(out, "\n") {
 						if runewidth.StringWidth(line) > width {
 							t.Errorf("width %d exceeded by %q", width, line)

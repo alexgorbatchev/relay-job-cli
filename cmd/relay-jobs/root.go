@@ -121,7 +121,7 @@ func newRootCommand() *cobra.Command {
 	receive.Flags().StringVar(&syncID, "id", "", "Reservation ID")
 	o.daemonFlags(receive)
 	syncGroup.AddCommand(receive)
-	root.AddCommand(jobs, worker, coordinator, execution, syncGroup, newSkillCommand(), o.serviceCommand())
+	root.AddCommand(jobs, worker, coordinator, execution, syncGroup, o.serviceCommand())
 	var foldDefaults func(*cobra.Command)
 	foldDefaults = func(c *cobra.Command) {
 		c.LocalFlags().VisitAll(func(f *pflag.Flag) { f.DefValue = display.Path(f.DefValue) })

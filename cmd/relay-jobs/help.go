@@ -2,13 +2,16 @@ package main
 
 import (
 	"fmt"
-	"strings"
 
-	cobrahelptree "github.com/alexgorbatchev/cobra-help-tree/v2"
-	"github.com/alexgorbatchev/godeps"
-	"github.com/mattn/go-runewidth"
+	cobrahelptree "github.com/alexgorbatchev/cobra-help-tree/v3"
 	"github.com/spf13/cobra"
 )
+
+const fallbackHelpWidth = 80
+
+// skillSource is where the relay-jobs agent skill is published:
+// skills/relay-jobs/SKILL.md on the repository's default branch.
+var skillSource = cobrahelptree.SkillSource{Repository: "alexgorbatchev/relay-jobs-cli", Branch: "main"}
 
 var techCatalog = cobrahelptree.TechCatalog{
 	"relay-jobs": {
@@ -23,53 +26,24 @@ var techCatalog = cobrahelptree.TechCatalog{
 }
 
 func setupHelp(cmd *cobra.Command) {
-	_ = cobrahelptree.SetupWithOptions(cmd, cobrahelptree.HelpOptions{
+	err := cobrahelptree.SetupWithOptions(cmd, cobrahelptree.HelpOptions{
 		Catalog: techCatalog,
-		Tree:    cobrahelptree.TreeOptions{HideGeneratedCommands: true},
+		Skill:   skillSource,
+		Tree:    cobrahelptree.TreeOptions{HideGeneratedCommands: true, TerminalWidth: humanHelpWidth()},
 	})
-	cmd.SetHelpFunc(func(c *cobra.Command, args []string) {
-		if godeps.IsAgentMode() {
-			if _, err := fmt.Fprintln(c.OutOrStdout(), "ALERT: Agents must read `AGENT=1 relay-jobs skill` before using this tool."); err != nil {
-				c.PrintErrln(err)
-				return
-			}
-		}
-		var screen string
-		if godeps.IsAgentMode() {
-			screen = cobrahelptree.RenderAgentHelp(c, techCatalog, cobrahelptree.AgentOptions{})
-		} else {
-			options := humanHelpOptions()
-			screen = boundedHelp(cobrahelptree.RenderTreeHelp(c, techCatalog, options), options.TerminalWidth)
-		}
-		if _, err := fmt.Fprint(c.OutOrStdout(), screen); err != nil {
-			c.PrintErrln(err)
-		}
-	})
-	cmd.SetUsageFunc(func(c *cobra.Command) error {
-		options := humanHelpOptions()
-		screen := boundedHelp(cobrahelptree.RenderTreeUsage(c, techCatalog, options), options.TerminalWidth)
-		if godeps.IsAgentMode() {
-			screen = "ALERT: Agents must read `AGENT=1 relay-jobs skill` before using this tool.\n" + cobrahelptree.RenderAgentHelp(c, techCatalog, cobrahelptree.AgentOptions{})
-		}
-		_, err := fmt.Fprint(c.ErrOrStderr(), screen)
-		return err
-	})
+	if err != nil {
+		// The options are static, so a failure is a programming error.
+		panic(fmt.Sprintf("configuring help: %v", err))
+	}
 }
 
-func boundedHelp(screen string, width int) string {
-	lines := strings.Split(screen, "\n")
-	for i, line := range lines {
-		lines[i] = runewidth.Truncate(line, width, strings.Repeat(".", min(width, 3)))
+// humanHelpWidth is the width human help is clipped to. Redirected output has no
+// terminal to measure, so it falls back to 80 columns instead of growing unbounded.
+func humanHelpWidth() int {
+	if width := cobrahelptree.GetTerminalWidth(); width > 0 {
+		return width
 	}
-	return strings.Join(lines, "\n")
-}
-
-func humanHelpOptions() cobrahelptree.TreeOptions {
-	width := cobrahelptree.GetTerminalWidth()
-	if width == 0 {
-		width = 80
-	}
-	return cobrahelptree.TreeOptions{HideGeneratedCommands: true, TerminalWidth: width}
+	return fallbackHelpWidth
 }
 
 func commandGroup(use, short string) *cobra.Command {

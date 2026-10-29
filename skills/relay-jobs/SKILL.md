@@ -4,7 +4,7 @@ description: Use when submitting remote commands, configuring workers, inspectin
 author: alexgorbatchev
 metadata:
   created_on: 2026-10-22 22:15
-  last_modified: 2026-10-29 12:05
+  last_modified: 2026-10-29 12:55
   status: current
 ---
 
@@ -16,8 +16,8 @@ Invoke without arguments for help. Global flags apply to every command:
 
 | Flag | Type | Default | Purpose |
 | --- | --- | --- | --- |
-| `--config` | string | `$XDG_CONFIG_HOME/relay-jobs/relay-jobs.toml` | User configuration; config base falls back to `~/.config`. |
-| `--socket` | string | `<default-state>/coordinator.sock` | Runtime default follows effective state; workers use worker.sock. |
+| `--config` | string | `~/.config/relay-jobs/relay-jobs.toml` | User configuration; `$XDG_CONFIG_HOME/relay-jobs/relay-jobs.toml` when `XDG_CONFIG_HOME` is set. |
+| `--socket` | string | `~/.local/state/relay-jobs/coordinator.sock` | Help shows the coordinator default; the effective default is `coordinator.sock` in the effective state directory, or `worker.sock` for workers. |
 | `--help` | bool | false | Print command help; `-h`. |
 | `--version` | bool | false | Print raw version and newline; `-v`. |
 
@@ -53,8 +53,8 @@ The following local flags apply to `coordinator serve`, `worker serve`, and `ser
 
 | Flag | Type | Default | Purpose |
 | --- | --- | --- | --- |
-| `--state` | string | `$XDG_STATE_HOME/relay-jobs` | Durable records; base falls back to `~/.local/state`. Workers default to relay-jobs-worker. |
-| `--cache` | string | `$XDG_CACHE_HOME/relay-jobs` | Workspaces; base falls back to `~/.cache`. Workers default to relay-jobs-worker. |
+| `--state` | string | `~/.local/state/relay-jobs` | Durable records; `$XDG_STATE_HOME/relay-jobs` when `XDG_STATE_HOME` is set. Workers default to `relay-jobs-worker` in the same base. |
+| `--cache` | string | `~/.cache/relay-jobs` | Workspaces; `$XDG_CACHE_HOME/relay-jobs` when `XDG_CACHE_HOME` is set. Workers default to `relay-jobs-worker` in the same base. |
 
 `coordinator serve` also accepts:
 
@@ -84,8 +84,8 @@ On macOS, commands and execution supervisors have separate native launchd jobs. 
 
 | Flag | Type | Default | Purpose |
 | --- | --- | --- | --- |
-| `--state` | string | `$XDG_STATE_HOME/relay-jobs` | Durable records; base falls back to `~/.local/state`. Workers default to relay-jobs-worker. |
-| `--cache` | string | `$XDG_CACHE_HOME/relay-jobs` | Workspaces; base falls back to `~/.cache`. Workers default to relay-jobs-worker. |
+| `--state` | string | `~/.local/state/relay-jobs` | Durable records; `$XDG_STATE_HOME/relay-jobs` when `XDG_STATE_HOME` is set. Workers default to `relay-jobs-worker` in the same base. |
+| `--cache` | string | `~/.cache/relay-jobs` | Workspaces; `$XDG_CACHE_HOME/relay-jobs` when `XDG_CACHE_HOME` is set. Workers default to `relay-jobs-worker` in the same base. |
 | `--slots` | int | 1 | Positive simultaneous reservation/execution limit. |
 | `--log-retention` | duration | 168h0m0s | Expire completed logs after seven days; 0 disables expiry. |
 | `--workspace-retention` | duration | 720h0m0s | Delete tracked workspaces after thirty idle days; 0 disables expiry. |
@@ -173,8 +173,8 @@ On Linux, copy the running binary into `$XDG_DATA_HOME/relay-jobs/bin/relay-jobs
 
 | Flag | Type | Default | Purpose |
 | --- | --- | --- | --- |
-| `--state` | string | `$XDG_STATE_HOME/relay-jobs` | Durable records; base falls back to `~/.local/state`. Workers default to relay-jobs-worker. |
-| `--cache` | string | `$XDG_CACHE_HOME/relay-jobs` | Workspaces; base falls back to `~/.cache`. Workers default to relay-jobs-worker. |
+| `--state` | string | `~/.local/state/relay-jobs` | Durable records; `$XDG_STATE_HOME/relay-jobs` when `XDG_STATE_HOME` is set. Workers default to `relay-jobs-worker` in the same base. |
+| `--cache` | string | `~/.cache/relay-jobs` | Workspaces; `$XDG_CACHE_HOME/relay-jobs` when `XDG_CACHE_HOME` is set. Workers default to `relay-jobs-worker` in the same base. |
 | `--worker-timeout` | duration | 1s | Coordinator role only; positive availability budget, including SSH setup and health response. |
 | `--role` | string | empty | Required: coordinator or worker. |
 | `--slots` | int | 1 | Positive worker concurrency limit; worker role only. |
@@ -188,7 +188,19 @@ Choose an XDG data directory without quotes, backslashes, or control characters;
 
 ## `relay-jobs skill`
 
-Print the Skills CLI installation command and canonical skill URL, identically in both modes, without network access. Read the URL using authenticated repository access when required.
+Print the Skills CLI installation command and canonical skill URL to stdout, byte-identical in both modes, without network access or reading configuration. It accepts no arguments or command-specific flags; extra arguments and output-write failures exit 1. Read the URL using authenticated repository access when required. Output:
+
+```
+Install the relay-jobs skill using the Skills CLI:
+
+  npx skills add alexgorbatchev/relay-jobs-cli --skill relay-jobs
+
+Skill:
+
+  https://github.com/alexgorbatchev/relay-jobs-cli/tree/main/skills/relay-jobs
+```
+
+Every agent-mode help screen opens with ``ALERT: Agents must read `AGENT=1 relay-jobs skill` before using this tool.`` Human help omits `skill` and `completion` from its command tree; both still run.
 
 ## `relay-jobs help [command]`
 

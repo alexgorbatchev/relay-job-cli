@@ -51,13 +51,6 @@ func execute(ctx context.Context, args ...string) (string, string, int) {
 	code := run(c)
 	return out.String(), stderr.String(), code
 }
-func executeCommand(args ...string) (string, error) {
-	out, stderr, code := execute(context.Background(), args...)
-	if code != 0 {
-		return out, fmt.Errorf("%s", stderr)
-	}
-	return out, nil
-}
 func TestCLIHelpAndSkill(t *testing.T) {
 	for _, mode := range []string{"0", "1", "true", "yes"} {
 		t.Run(mode, func(t *testing.T) {
@@ -70,10 +63,7 @@ func TestCLIHelpAndSkill(t *testing.T) {
 				if args[0] == "--version" && out != version+"\n" {
 					t.Fatal(out)
 				}
-				if args[0] == "skill" && out != skillContent {
-					t.Fatal(out)
-				}
-				if (args[0] == "--help" || args[0] == "help") && mode != "0" && !strings.HasPrefix(out, "ALERT:") {
+				if args[0] == "skill" && out != skillInstructions {
 					t.Fatal(out)
 				}
 			}
@@ -81,11 +71,6 @@ func TestCLIHelpAndSkill(t *testing.T) {
 				t.Fatal("missing CLI diagnostic")
 			}
 		})
-	}
-	t.Chdir(t.TempDir())
-	out, err := executeCommand("skill")
-	if err != nil || out != skillContent {
-		t.Fatal("offline skill contract")
 	}
 }
 func walk(c *cobra.Command, visit func(*cobra.Command)) {
@@ -97,13 +82,12 @@ func walk(c *cobra.Command, visit func(*cobra.Command)) {
 		walk(child, visit)
 	}
 }
-func TestSkillCoversInterface(t *testing.T) {
-	t.Setenv("AGENT", "1")
-	b, err := os.ReadFile("../../skills/relay-jobs/SKILL.md")
-	if err != nil {
-		t.Fatal(err)
-	}
-	text := string(b)
+
+// TestSkillSectionsDocumentCommandFlags holds SKILL.md to its layout: every
+// command has its own section, and each flag appears in that section's table with
+// its type and default.
+func TestSkillSectionsDocumentCommandFlags(t *testing.T) {
+	text := readSkill(t)
 	c := newRootCommand()
 	c.InitDefaultHelpCmd()
 	c.InitDefaultCompletionCmd()
@@ -133,22 +117,7 @@ func TestSkillCoversInterface(t *testing.T) {
 		}
 		c.LocalNonPersistentFlags().VisitAll(check)
 		c.PersistentFlags().VisitAll(check)
-		args := strings.Fields(c.CommandPath())[1:]
-		out, stderr, code := execute(context.Background(), append(args, "--help")...)
-		if code != 0 || stderr != "" || !strings.HasPrefix(out, "ALERT: Agents must read") {
-			t.Errorf("%s help lost its agent alert", c.CommandPath())
-		}
 	})
-	_, selected, _ := strings.Cut(skillContent, "--skill ")
-	name := strings.Fields(selected)[0]
-	_, declared, _ := strings.Cut(text, "\nname: ")
-	declared, _, _ = strings.Cut(declared, "\n")
-	if name != declared || !strings.HasSuffix(skillURL, "/skills/"+name) {
-		t.Fatal("printed skill name or URL disagrees with the repository skill")
-	}
-	if _, _, code := execute(context.Background(), "skill", "extra"); code == 0 {
-		t.Fatal("skill accepted positional arguments")
-	}
 }
 
 func verifyFlagReference(t *testing.T, section string, f *pflag.Flag) {
